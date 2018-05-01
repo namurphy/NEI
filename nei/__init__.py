@@ -9,5 +9,6 @@ from ._astropy_init import *
 if not _ASTROPY_SETUP_:
     # For egg_info test builds to pass, put package imports here.
 
-    from .time_advance import *
-    from .classes import *
+    from . import classes
+    from . import time_advance
+    from . import utils
