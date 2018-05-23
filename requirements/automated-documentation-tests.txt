@@ -1,4 +1,7 @@
 astropy
+lmfit
+roman
+mpmath
 coveralls
 matplotlib
 numpy
@@ -6,6 +9,8 @@ cython
 numpydoc
 pillow
 scipy
+plasmapy
 sphinx
 sphinx-automodapi
 sphinx-gallery
+
