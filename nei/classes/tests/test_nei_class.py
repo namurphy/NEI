@@ -83,7 +83,7 @@ tests = {
     },
 
     'equil test cool': {
-        'inputs': ['H', 'He', 'C', 'N', 'O', 'Fe'],
+        'inputs': ['H', 'He', 'Fe'],
         'abundances': {'H': 1, 'He': 0.1, 'C': 1e-4, 'N': 1e-4, 'O': 1e-4, 'Fe': 1e-4},
         'T_e': 10001.0 * u.K,
         'n': 1e13 * u.cm ** -3,
@@ -96,7 +96,7 @@ tests = {
     },
 
     'equil test hot': {
-        'inputs': ['H', 'He', 'C', 'N', 'O', 'Fe'],
+        'inputs': ['H', 'He', 'O'],
         'abundances': {'H': 1, 'He': 0.1, 'C': 1e-4, 'N': 1e-4, 'O': 1e-4, 'Fe': 1e-4, 'S': 2e-6},
         'T_e': 7e6 * u.K,
         'n': 1e9 * u.cm ** -3,
@@ -127,6 +127,8 @@ tests = {
 }
 
 test_names = list(tests.keys())
+
+test_names = ['basic']
 
 
 class TestNEI:
