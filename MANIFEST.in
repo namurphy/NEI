@@ -11,11 +11,11 @@ recursive-include docs *
 recursive-include licenses *
 recursive-include cextern *
 recursive-include scripts *
+recursive-include data *
 
 prune build
 prune docs/_build
 prune docs/api
-
 
 # the next few stanzas are for astropy_helpers.  It's derived from the
 # astropy_helpers/MANIFEST.in, but requires additional includes for the actual
@@ -36,6 +36,5 @@ recursive-include astropy_helpers/astropy_helpers/sphinx *
 
 prune astropy_helpers/build
 prune astropy_helpers/astropy_helpers/tests
-
 
 global-exclude *.pyc *.o
