@@ -2,7 +2,7 @@
 import warnings
 import numpy as np
 from plasmapy import atomic
-import nei as nei
+from ..eigenvaluetable import EigenData2
 import pytest
 
 #-------------------------------------------------------------------------------
@@ -69,7 +69,7 @@ def func_solver_eigenval(natom, te, ne, dt, f0, table):
 #    eqi_ch.calculate(temperatures)
 #    conce = eqi_ch.Ioneq
 #
-#    table_sta = nei.EigenData2(element=natom)
+#    table_sta = EigenData2(element=natom)
 #    for i in range(2):
 #        ch_conce = conce[:, i]
 #        table_conce = table_sta.equilibrium_state(T_e=temperatures[i])
@@ -95,7 +95,7 @@ def test_reachequlibrium_state(natom=8):
 
     # Start from any ionizaiont states, e.g., Te = 4.0d4 K,
     time = 0
-    table = nei.EigenData2(element=natom)
+    table = EigenData2(element=natom)
     f0 = table.equilibrium_state(T_e=4.0e4)
 
     print('START test_reachequlibrium_state:')
@@ -132,7 +132,7 @@ def test_reachequlibrium_state_multisteps(natom=8):
 
     # Start from any ionizaiont states, e.g., Te = 4.0d4 K,
     time = 0
-    table = nei.EigenData2(element=natom)
+    table = EigenData2(element=natom)
     f0 = table.equilibrium_state(T_e=4.0e+4)
 
     print('START test_reachequlibrium_state_multisteps:')
@@ -165,6 +165,6 @@ def test_element_range(atomic_numb):
     """
     try:
         element_symbol = atomic.atomic_symbol(atomic_numb)
-        eigen = nei.EigenData2(element=element_symbol)
+        eigen = EigenData2(element=element_symbol)
     except Exception as exc:
-        raise Exception(f"Problem with {element_symbol}.") from exc
+        raise Exception(f"Problem with atomic number={atomic_numb}.") from exc
