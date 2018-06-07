@@ -24,8 +24,8 @@ tests = {
         'time_start': 0 * u.s,
         'time_max': 800 * u.s,
         'max_steps': 1,
-        'adapt_dt': False,
         'dt': 800 * u.s,
+        'adapt_dt': False,
         'verbose': True,
     },
 
@@ -37,9 +37,9 @@ tests = {
         'time_input': time_array,
         'time_start': 0 * u.s,
         'time_max': 800 * u.s,
+        'dt': 100 * u.s,
         'max_steps': 2,
         'adapt_dt': False,
-        'dt': 100 * u.s,
         'verbose': True,
     },
 
@@ -64,8 +64,8 @@ tests = {
         'n': 1e15 * u.cm **-3,
         'time_max': 800 * u.s,
         'max_steps': 2,
-        'adapt_dt': False,
         'dt': 100 * u.s,
+        'adapt_dt': False,
         'verbose': True,
     },
 
@@ -77,9 +77,9 @@ tests = {
         'time_start': 0 * u.s,
         'time_max': 800 * u.s,
         'adapt_dt': False,
-        'dt': 100 * u.s,
+        'dt': 200 * u.s,
         'verbose': True,
-        'max_steps': 11
+        'max_steps': 4
     },
 
     'equil test cool': {
@@ -87,11 +87,11 @@ tests = {
         'abundances': {'H': 1, 'He': 0.1, 'C': 1e-4, 'N': 1e-4, 'O': 1e-4, 'Fe': 1e-4},
         'T_e': 10001.0 * u.K,
         'n': 1e13 * u.cm ** -3,
-        'time_max': 1e6 * u.s,
+        'time_max': 2e6 * u.s,
         'tol': 1e-9,
         'adapt_dt': False,
-        'dt': 1e5 * u.s,
-        'max_steps': 9,
+        'dt': 5e5 * u.s,
+        'max_steps': 4,
         'verbose': True,
     },
 
@@ -101,10 +101,10 @@ tests = {
         'T_e': 7e6 * u.K,
         'n': 1e9 * u.cm ** -3,
         'time_max': 1e8 * u.s,
-        'dt': 1e7 * u.s,
+        'dt': 5e7 * u.s,
+        'max_steps': 3,
         'adapt_dt': False,
         'verbose': True,
-        'max_steps': 15,
     },
 
     'equil test start far out of equil': {
@@ -122,6 +122,7 @@ tests = {
         'time_max': 1e6 * u.s,
         'adapt_dt': False,
         'verbose': True,
+        'max_steps': 2
     }
 }
 
