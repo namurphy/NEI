@@ -149,13 +149,15 @@ def test_reachequlibrium_state_multisteps(natom=8):
     print(f"EI :", table.equilibrium_state(T_e=te0))
     print("End Test.\n")
 
-def test_element_range():
+
+@pytest.mark.parametrize('atomic_numb', [i for i in range(1, 27)])
+def test_element_range(atomic_numb):
     """
     Function test_element_range:
         This function is used to test element including Hydrogen to Iron.
     """
-    atomic_numb = np.linspace(1, 26, 26, endpoint=True)
-    for i in atomic_numb:
-        element_symbol = atomic.atomic_symbol(int(i))
+    try:
+        element_symbol = atomic.atomic_symbol(atomic_numb)
         eigen = nei.EigenData2(element=element_symbol)
-        print(f'Element: ', element_symbol)
+    except Exception as exc:
+        raise Exception(f"Problem with {element_symbol}.") from exc
