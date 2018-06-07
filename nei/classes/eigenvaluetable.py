@@ -195,15 +195,19 @@ class EigenData2:
         T_e_grid_max = np.amax(T_e_array)
         T_e_grid_min = np.amin(T_e_array)
 
-        if (T_e >= T_e_grid_max):
-            warnings.warn("Temperature reaches/exceeds the Temperature grid \
-                          Boundary: Temperature index will be reset \
-                          to {:}".format(self._ntemp-1), UserWarning)
+        if T_e == T_e_grid_max:
+            return self._ntemp - 1
+        elif T_e == T_e_grid_min:
+            return 0
+        elif T_e > T_e_grid_max:
+            warnings.warn(f"Temperature exceeds the temperature grid "
+                          f"boundary: temperature index will be reset "
+                          f"to {self._ntemp - 1}", UserWarning)
             return self._ntemp-1
-        if (T_e <= T_e_grid_min):
-            warnings.warn("Temperature reaches/exceeds the Temperature grid \
-                          Boundary: Temperature index will be reset to \
-                          {:}".format(0), UserWarning)
+        elif T_e < T_e_grid_min:
+            warnings.warn(f"Temperature is below the temperature grid "
+                          f"boundary: temperature index will be reset to "
+                          f"0.", UserWarning)
             return 0
 
         # TODO: Add a test to check that the temperature grid is monotonic
