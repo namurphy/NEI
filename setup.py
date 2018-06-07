@@ -129,12 +129,14 @@ for root, dirs, files in os.walk(PACKAGENAME):
 package_info['package_data'][PACKAGENAME].extend(c_files)
 
 # Include all HDF5 files, recursively, since we cannot do this in
-# MANIFEST.in with a "dynamic" directory name.
+# MANIFEST.in with a "dynamic" directory name.  Adding in coveragerc
+# too as a bit of a hack since it doesn't seem to be working from
+# MANIFEST.in.
 
 h5_files = []
 for root, dirs, files in os.walk(PACKAGENAME):
     for filename in files:
-        if filename.endswith('.h5'):
+        if filename.endswith('.h5') or filename.endswith('coveragerc'):
             h5_files.append(
                 os.path.join(
                     os.path.relpath(root, PACKAGENAME), filename))
