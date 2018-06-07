@@ -43,32 +43,39 @@ def func_solver_eigenval(natom, te, ne, dt, f0, table):
             ft[ii] = 0.0
     return ft
 
+# [Nick] Temporarily commenting this test out to check if it may be
+# causing problems in the tests on Travis CI because of the dependence
+# on ChiantiPy.  This might be causing the tests on Travis CI to stall,
+# while still working when we run `pytest` or `python setup.py test`
+# locally.
+
 #@pytest.mark.parametrize('natom', natom_list)
-def test_equlibrium_state_vs_chiantipy(natom=8):
-    """
-        Test equilibrium states saved in EigenData2 and compare them with
-        Outputs from ChiantiPy.
-        Note:
-        This test requires ChiantiPy to be installed (see details
-        in: https://github.com/chianti-atomic/ChiantiPy).
-    """
-    try:
-        import ChiantiPy.core as ch
-    except ImportError:
-        warnings.warn('ChiantiPy is required in this test.', UserWarning)
-        return
+#def test_equlibrium_state_vs_chiantipy(natom=8):
+#    """
+#        Test equilibrium states saved in EigenData2 and compare them with
+#        Outputs from ChiantiPy.
+#        Note:
+#        This test requires ChiantiPy to be installed (see details
+#        in: https://github.com/chianti-atomic/ChiantiPy).
+#    """
+#    try:
+#        import ChiantiPy.core as ch
+#    except ImportError:
+#        warnings.warn('ChiantiPy is required in this test.', UserWarning)
+#        return
+#
+#    temperatures = [1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8]
+#    eqi_ch = ch.ioneq(natom)
+#    eqi_ch.calculate(temperatures)
+#    conce = eqi_ch.Ioneq
+#
+#    table_sta = nei.EigenData2(element=natom)
+#    for i in range(2):
+#        ch_conce = conce[:, i]
+#        table_conce = table_sta.equilibrium_state(T_e=temperatures[i])
+#        assert ch_conce.all() == table_conce.all()
+#    return
 
-    temperatures = [1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8]
-    eqi_ch = ch.ioneq(natom)
-    eqi_ch.calculate(temperatures)
-    conce = eqi_ch.Ioneq
-
-    table_sta = nei.EigenData2(element=natom)
-    for i in range(2):
-        ch_conce = conce[:, i]
-        table_conce = table_sta.equilibrium_state(T_e=temperatures[i])
-        assert ch_conce.all() == table_conce.all()
-    return
 
 def test_reachequlibrium_state(natom=8):
     """
@@ -150,7 +157,7 @@ def test_reachequlibrium_state_multisteps(natom=8):
     print("End Test.\n")
 
 
-@pytest.mark.parametrize('atomic_numb', [i for i in range(1, 27)])
+@pytest.mark.parametrize('atomic_numb', np.arange(1, 27))
 def test_element_range(atomic_numb):
     """
     Function test_element_range:
