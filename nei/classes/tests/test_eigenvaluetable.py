@@ -76,8 +76,8 @@ def func_solver_eigenval(natom, te, ne, dt, f0, table):
 #        assert ch_conce.all() == table_conce.all()
 #    return
 
-
-def test_reachequlibrium_state(natom=8):
+@pytest.mark.parametrize('natom', [1, 2, 6, 7, 8])
+def test_reachequlibrium_state(natom):
     """
         Starting the random initial distribution, the charge states will reach
         to equilibrium cases after a long time.
@@ -110,9 +110,13 @@ def test_reachequlibrium_state(natom=8):
     print(f'time_end = ', time+dt)
     print(f'NEI:', ft)
     print(f'Sum(ft) = ', np.sum(ft))
-
     print(f'EI :', table.equilibrium_state(T_e=te0))
     print("End Test.\n")
+
+    assert np.isclose(np.sum(ft), 1), 'np.sum(ft) is not approximately 1'
+    assert np.isclose(np.sum(f0), 1), 'np.sum(f0) is not approximately 1'
+    assert np.allclose(ft, table.equilibrium_state(T_e=te0))
+
 
 def test_reachequlibrium_state_multisteps(natom=8):
     """
@@ -152,6 +156,8 @@ def test_reachequlibrium_state_multisteps(natom=8):
     print(f'time_end = ', time+dt)
     print(f'NEI:', ft)
     print(f'Sum(ft) = ', np.sum(ft))
+
+    assert np.isclose(np.sum(ft), 1)
 
     print(f"EI :", table.equilibrium_state(T_e=te0))
     print("End Test.\n")
