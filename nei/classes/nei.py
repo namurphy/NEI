@@ -373,8 +373,8 @@ class NEI:
     >>> abund = {'H': 1, 'He': 0.085}
     >>> n = np.array([1e9, 1e8]) * u.cm ** -3
     >>> T_e = np.array([10000, 40000]) * u.K
-    >>> time = np.array([0, 600]) * u.s
-    >>> dt = 0.1 * u.s
+    >>> time = np.array([0, 300]) * u.s
+    >>> dt = 0.25 * u.s
 
     The initial conditions can be accessed using the initial attribute.
 
@@ -393,11 +393,11 @@ class NEI:
     The final results can be access with the `final` attribute.
 
     >>> sim.final.ionic_fractions['H']
-    array([0.06825444, 0.93174556])
+    array([0.16665179, 0.83334821])
     >>> sim.final.ionic_fractions['He']
-    array([0.89964062, 0.09936038, 0.00099899])
+    array([0.88685261, 0.11218358, 0.00096381])
     >>> sim.final.T_e
-    <Quantity 50000. K>
+    <Quantity 40000. K>
 
     Both `initial` and `final` are instances of the `IonizationStates`
     class.
