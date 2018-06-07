@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Test_eigenvaluetable"""
 import warnings
 import numpy as np
