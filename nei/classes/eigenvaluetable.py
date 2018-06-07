@@ -44,7 +44,7 @@ class EigenData2:
 
     Or one may output properties at other temperatures, for example:
     >>> table.eigenvalues(T_e=12589.254117941662)
-    array([-2.18953343e-12, -4.37188380e-13, -5.04870979e-29])
+    array([-1.87480784e-12, -3.73191378e-13,  0.00000000e+00])
 
     Or input temperature index on the grid:
     >>> table.eigenvalues(T_e_index=100)
