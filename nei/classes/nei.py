@@ -183,8 +183,10 @@ class Simulation:
         self._time = self._time[0:nsteps]
 
         for element in self.elements:
-            self._ionic_fractions[element] = self._ionic_fractions[element][0:nsteps, :]
-            self._number_densities[element] = self._number_densities[element][0:nsteps, :]
+            self._ionic_fractions[element] = \
+                self._ionic_fractions[element][0:nsteps, :]
+            self._number_densities[element] = \
+                self._number_densities[element][0:nsteps, :]
 
         self._last_step = nsteps - 1
 
@@ -1160,12 +1162,12 @@ class NEI:
 
         Returns
         ------
-        den_ratio: array-like
+        dens_ratio: array-like
                    The density solution to the mass conservation equation as
                    defined by the Rankine-Hugoniot relations.
         """
 
-        den_ratio = ((gamma+1)*mach**2)/(2+(gamma-1)*mach**2)
+        dens_ratio = ((gamma+1)*mach**2)/(2+(gamma-1)*mach**2)
 
         return dens_ratio
 
