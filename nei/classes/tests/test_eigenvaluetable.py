@@ -164,7 +164,7 @@ def test_element_range(atomic_numb):
         This function is used to test element including Hydrogen to Iron.
     """
     try:
-        element_symbol = atomic.atomic_symbol(atomic_numb)
+        element_symbol = atomic.atomic_symbol(int(atomic_numb))
         eigen = EigenData2(element=element_symbol)
     except Exception as exc:
         raise Exception(f"Problem with atomic number={atomic_numb}.") from exc
