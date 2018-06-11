@@ -11,3 +11,4 @@ if not _ASTROPY_SETUP_:
 
     from .time_advance import *
     from .classes import *
+    from nei.physics import shocks
