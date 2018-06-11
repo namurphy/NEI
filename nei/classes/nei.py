@@ -8,6 +8,7 @@ from scipy import interpolate
 from .eigenvaluetable import EigenData2
 from .ionization_states import IonizationStates
 import warnings
+from nei.physics import *
 
 # TODO: Allow this to keep track of velocity and position too, and
 # eventually to have density and temperature be able to be functions of
@@ -936,55 +937,7 @@ class NEI:
 
         return np.array(get_time(time), dtype=int)
 
-    def dens_ratio(self, gamma, mach):
-        """
-        Returns the density ratio according to the Rankine-Hugonoit 
-        jump conditions
-
-        Parameters
-        ------
-        gamma: float,
-               The specific heats ratios of the system
-        mach: int,
-              The mach number of the system
-
-        Returns
-        ------
-        den_ratio: array-like
-                   The density solution to the mass conservation equation as 
-                   defined by the Rankine-Hugoniot relations.
-        """
-
-        den_ratio = ((gamma+1)*mach**2)/(2+(gamma-1)*mach**2)
-
-        return dens_ratio
-
-    def temp_ratio(self, gamma, mach):
-        """
-        Returns the temperature ratio according to the Rankine-Hugonoit 
-        jump conditions
-
-        Parameters
-        ------
-        gamma: float,
-               The specific heats ratios of the system
-        mach: int,
-              The mach number of the system
-
-        Returns
-        ------
-        temp_ratio: array-like
-                   The temperature solutions to the energy conservation equation as 
-                   defined by the Rankine-Hugoniot relations.
-        """
-
-        temp_ratio = ((gamma+1)+2 * gamma * (mach**2-1))*\
-        ((gamma + 1) + (gamma-1)*(mach**2 - 1)) / \
-        (gamma + 1)**2*mach**2
-
-        return temp_ratio
-
-class Visualize:
+class Visualize(NEI):
     """
     Store plotting results from the simulation
     """
@@ -992,7 +945,7 @@ class Visualize:
         self.element = element
         self.results = results
 
-    def ionfrac_evol_plot(self, ion, time_sequence):
+    def ionicfrac_evol_plot(self, ion, time_sequence):
         """
         Creates a plot of the ionix fraction time evolution of element inputs
 
@@ -1021,12 +974,12 @@ class Visualize:
         #Ensure ion input is array of integers
         ion = np.array(ion, dtype=np.int16)
 
-        
+        linsetyles = ['--','-.',':','-','-+','-x','o']
 
         if ion.size > 1:
             for nstate in ion:
                 ionic_frac = self.results.ionic_fractions[self.element][:,nstate]
-                plt.plot(time.value,ionic_frac, label='%s+%i'%(self.element, nstate))
+                plt.plot(time.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label='%s+%i'%(self.element, nstate))
                 plt.xlabel('Time (s)')
                 plt.ylabel('Ionic Fraction')
                 plt.title('Ionic Fraction Evolution of {}'.format(self.element))
@@ -1040,7 +993,7 @@ class Visualize:
             plt.title('Ionic Fraction Evolution of $%s^{%i+}$'%(self.element,ion))
             plt.show()
 
-    def ionfrac_bar_plot(self, time_index):
+    def ionicfrac_bar_plot(self, time_index):
         """
         Creates a bar plot of the ion fraction change at a particular time index
 
@@ -1087,7 +1040,77 @@ class Visualize:
             ax.set_ylabel('Ionic Fraction') 
             plt.show()
     
+    def rh_density_plot(self, gamma, mach, ion='None'):
+        """
+        Creates a plot of the Rankine-Huguniot jump relation for the
+        density of our element
 
+        Parameters
+        ------
+        gamma: float,
+               The specific heats ratio of the system
+        mach: float,
+              The mach number of the scenario 
+        ion: int,
+             The ionic integer charge of the element in question
+        """
+
+
+        #Instantiate the MHD class
+        mhd = shocks.MHD()
+
+        nstates = pl.atomic.atomic_number(self.element) + 1
+
+        if ion == 'None':
+
+            for charge in range(nstates):
+
+                post_rho = mhd.rh_density(self.results.number_densities[self.element].value[0, charge], gamma, mach)
+
+                plt.semilogy(post_rho, label=f'{self.element}{charge}+')
+
+            plt.legend()
+            plt.show()
+
+        else:
+
+            if not isinstance(ion, int):
+                raise TypeError('Please make sure that your charge value is an integer')
+            elif ion > nstates:
+                raise ValueError('The ionic charge input is greater than allowed for this element')
+
+
+            post_rho = mhd.rh_density(init_dens = self.results.number_densities[self.element].value[0, ion], gamma=gamma, mach=mach)
+
+            plt.semilogy(post_rho)
+            plt.title('Density Shock Transition')
+            plt.xlabel('Mach Number')
+            plt.ylabel('Number Density')
+            plt.show()
+
+    def rh_temp_plot(self, gamma, mach):
+        """
+        Creates a plot of the Rankine-Huguniot jump relation for the
+        density of our element
+
+        Parameters
+        ------
+        gamma: float,
+               The specific heats ratio of the system
+        mach: float,
+              The mach number of the scenario 
+        """
+
+        #Instantiate the MHD class
+        mhd = shocks.MHD()
+
+        post_temp = mhd.rh_temp(self.results.T_e.value[0], gamma, mach)
+
+        plt.semilogy(mach, post_temp)
+        plt.title('Temperature Shock Transition')
+        plt.xlabel('Mach Number')
+        plt.ylabel('Log Temperature (K)')
+        plt.show()
 
 
 
