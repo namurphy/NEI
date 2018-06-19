@@ -945,7 +945,7 @@ class Visualize(NEI):
         self.element = element
         self.results = results
 
-    def ionicfrac_evol_plot(self, ion, time_sequence):
+    def ionicfrac_evol_plot(self,time_sequence, ion='all'):
         """
         Creates a plot of the ionix fraction time evolution of element inputs
 
@@ -971,27 +971,39 @@ class Visualize(NEI):
             print("Invalid time units")
 
         
-        #Ensure ion input is array of integers
-        ion = np.array(ion, dtype=np.int16)
+        if ion == 'all':
+            charge_states = pl.atomic.atomic_number(self.element) + 1
+        else:
+            #Ensure ion input is array of integers
+            charge_states = np.array(ion, dtype=np.int16)
 
-        linsetyles = ['--','-.',':','-','-+','-x','o']
+        linsetyles = ['--','-.',':','-']
 
-        if ion.size > 1:
-            for nstate in ion:
+        if ion =='all':
+            for nstate in range(charge_states):
                 ionic_frac = self.results.ionic_fractions[self.element][:,nstate]
                 plt.plot(time.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label='%s+%i'%(self.element, nstate))
                 plt.xlabel('Time (s)')
                 plt.ylabel('Ionic Fraction')
                 plt.title('Ionic Fraction Evolution of {}'.format(self.element))
             plt.legend()
-            plt.show()
         else:
-            ionic_frac = self.results.ionic_fractions[self.element][:,ion]
-            plt.plot(time.value,ionic_frac)
-            plt.xlabel('Time (s)')
-            plt.ylabel('Ionic Fraction')
-            plt.title('Ionic Fraction Evolution of $%s^{%i+}$'%(self.element,ion))
-            plt.show()
+            if charge_states.size > 1:
+                for nstate in charge_states:
+                    ionic_frac = self.results.ionic_fractions[self.element][:,nstate]
+                    plt.plot(time.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label='%s+%i'%(self.element, nstate))
+                    plt.xlabel('Time (s)')
+                    plt.ylabel('Ionic Fraction')
+                    plt.title('Ionic Fraction Evolution of {}'.format(self.element))
+                plt.legend()
+                #plt.show()
+            else:
+                ionic_frac = self.results.ionic_fractions[self.element][:,charge_states]
+                plt.plot(time.value,ionic_frac)
+                plt.xlabel('Time (s)')
+                plt.ylabel('Ionic Fraction')
+                plt.title('Ionic Fraction Evolution of $%s^{%i+}$'%(self.element,ion))
+                #plt.show()
 
     def ionicfrac_bar_plot(self, time_index):
         """
@@ -1030,7 +1042,7 @@ class Visualize(NEI):
             ax.set_title(f'{self.element}')
             ax.set_ylabel('Ionic Fraction') 
             ax.legend(loc='best')
-            plt.show()
+            #plt.show()
 
         else:
             ax.bar(x, self.results.ionic_fractions[self.element][time_index,:], alpha=1.0, width=width)
@@ -1038,7 +1050,7 @@ class Visualize(NEI):
             ax.set_xticklabels(x)
             ax.set_title(f'{self.element}')
             ax.set_ylabel('Ionic Fraction') 
-            plt.show()
+            #plt.show()
     
     def rh_density_plot(self, gamma, mach, ion='None'):
         """
@@ -1070,7 +1082,7 @@ class Visualize(NEI):
                 plt.semilogy(post_rho, label=f'{self.element}{charge}+')
 
             plt.legend()
-            plt.show()
+            #plt.show()
 
         else:
 
@@ -1086,7 +1098,7 @@ class Visualize(NEI):
             plt.title('Density Shock Transition')
             plt.xlabel('Mach Number')
             plt.ylabel('Number Density')
-            plt.show()
+            #plt.show()
 
     def rh_temp_plot(self, gamma, mach):
         """
@@ -1110,7 +1122,7 @@ class Visualize(NEI):
         plt.title('Temperature Shock Transition')
         plt.xlabel('Mach Number')
         plt.ylabel('Log Temperature (K)')
-        plt.show()
+        #plt.show()
 
 
 
