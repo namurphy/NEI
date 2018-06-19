@@ -937,7 +937,7 @@ class NEI:
 
         return np.array(get_time(time), dtype=int)
 
-class Visualize(NEI):
+class Visualize:
     """
     Store plotting results from the simulation
     """
@@ -947,7 +947,7 @@ class Visualize(NEI):
 
     def ionicfrac_evol_plot(self,time_sequence, ion='all'):
         """
-        Creates a plot of the ionix fraction time evolution of element inputs
+        Creates a plot of the ionic fraction time evolution of element inputs
 
         Paramaters
         ------
