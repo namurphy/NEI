@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """The EigenData2 class."""
 
 import warnings
@@ -46,7 +44,7 @@ class EigenData2:
 
     Or one may output properties at other temperatures, for example:
     >>> table.eigenvalues(T_e=12589.254117941662)
-    array([-2.18953343e-12, -4.37188380e-13, -5.04870979e-29])
+    array([-1.87480784e-12, -3.73191378e-13,  0.00000000e+00])
 
     Or input temperature index on the grid:
     >>> table.eigenvalues(T_e_index=100)
@@ -195,15 +193,19 @@ class EigenData2:
         T_e_grid_max = np.amax(T_e_array)
         T_e_grid_min = np.amin(T_e_array)
 
-        if (T_e >= T_e_grid_max):
-            warnings.warn("Temperature reaches/exceeds the Temperature grid \
-                          Boundary: Temperature index will be reset \
-                          to {:}".format(self._ntemp-1), UserWarning)
+        if T_e == T_e_grid_max:
+            return self._ntemp - 1
+        elif T_e == T_e_grid_min:
+            return 0
+        elif T_e > T_e_grid_max:
+            warnings.warn(f"Temperature exceeds the temperature grid "
+                          f"boundary: temperature index will be reset "
+                          f"to {self._ntemp - 1}", UserWarning)
             return self._ntemp-1
-        if (T_e <= T_e_grid_min):
-            warnings.warn("Temperature reaches/exceeds the Temperature grid \
-                          Boundary: Temperature index will be reset to \
-                          {:}".format(0), UserWarning)
+        elif T_e < T_e_grid_min:
+            warnings.warn(f"Temperature is below the temperature grid "
+                          f"boundary: temperature index will be reset to "
+                          f"0.", UserWarning)
             return 0
 
         # TODO: Add a test to check that the temperature grid is monotonic

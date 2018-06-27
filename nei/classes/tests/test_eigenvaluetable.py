@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Test_eigenvaluetable"""
 import warnings
 import numpy as np
 from plasmapy import atomic
-import nei as nei
+from ..eigenvaluetable import EigenData2
 import pytest
 
 #-------------------------------------------------------------------------------
@@ -45,34 +43,41 @@ def func_solver_eigenval(natom, te, ne, dt, f0, table):
             ft[ii] = 0.0
     return ft
 
+# [Nick] Temporarily commenting this test out to check if it may be
+# causing problems in the tests on Travis CI because of the dependence
+# on ChiantiPy.  This might be causing the tests on Travis CI to stall,
+# while still working when we run `pytest` or `python setup.py test`
+# locally.
+
 #@pytest.mark.parametrize('natom', natom_list)
-def test_equlibrium_state_vs_chiantipy(natom=8):
-    """
-        Test equilibrium states saved in EigenData2 and compare them with
-        Outputs from ChiantiPy.
-        Note:
-        This test requires ChiantiPy to be installed (see details
-        in: https://github.com/chianti-atomic/ChiantiPy).
-    """
-    try:
-        import ChiantiPy.core as ch
-    except ImportError:
-        warnings.warn('ChiantiPy is required in this test.', UserWarning)
-        return
+#def test_equlibrium_state_vs_chiantipy(natom=8):
+#    """
+#        Test equilibrium states saved in EigenData2 and compare them with
+#        Outputs from ChiantiPy.
+#        Note:
+#        This test requires ChiantiPy to be installed (see details
+#        in: https://github.com/chianti-atomic/ChiantiPy).
+#    """
+#    try:
+#        import ChiantiPy.core as ch
+#    except ImportError:
+#        warnings.warn('ChiantiPy is required in this test.', UserWarning)
+#        return
+#
+#    temperatures = [1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8]
+#    eqi_ch = ch.ioneq(natom)
+#    eqi_ch.calculate(temperatures)
+#    conce = eqi_ch.Ioneq
+#
+#    table_sta = EigenData2(element=natom)
+#    for i in range(2):
+#        ch_conce = conce[:, i]
+#        table_conce = table_sta.equilibrium_state(T_e=temperatures[i])
+#        assert ch_conce.all() == table_conce.all()
+#    return
 
-    temperatures = [1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8]
-    eqi_ch = ch.ioneq(natom)
-    eqi_ch.calculate(temperatures)
-    conce = eqi_ch.Ioneq
-
-    table_sta = nei.EigenData2(element=natom)
-    for i in range(2):
-        ch_conce = conce[:, i]
-        table_conce = table_sta.equilibrium_state(T_e=temperatures[i])
-        assert ch_conce.all() == table_conce.all()
-    return
-
-def test_reachequlibrium_state(natom=8):
+@pytest.mark.parametrize('natom', [1, 2, 6, 7, 8])
+def test_reachequlibrium_state(natom):
     """
         Starting the random initial distribution, the charge states will reach
         to equilibrium cases after a long time.
@@ -90,7 +95,7 @@ def test_reachequlibrium_state(natom=8):
 
     # Start from any ionizaiont states, e.g., Te = 4.0d4 K,
     time = 0
-    table = nei.EigenData2(element=natom)
+    table = EigenData2(element=natom)
     f0 = table.equilibrium_state(T_e=4.0e4)
 
     print('START test_reachequlibrium_state:')
@@ -105,9 +110,13 @@ def test_reachequlibrium_state(natom=8):
     print(f'time_end = ', time+dt)
     print(f'NEI:', ft)
     print(f'Sum(ft) = ', np.sum(ft))
-
     print(f'EI :', table.equilibrium_state(T_e=te0))
     print("End Test.\n")
+
+    assert np.isclose(np.sum(ft), 1), 'np.sum(ft) is not approximately 1'
+    assert np.isclose(np.sum(f0), 1), 'np.sum(f0) is not approximately 1'
+    assert np.allclose(ft, table.equilibrium_state(T_e=te0))
+
 
 def test_reachequlibrium_state_multisteps(natom=8):
     """
@@ -127,7 +136,7 @@ def test_reachequlibrium_state_multisteps(natom=8):
 
     # Start from any ionizaiont states, e.g., Te = 4.0d4 K,
     time = 0
-    table = nei.EigenData2(element=natom)
+    table = EigenData2(element=natom)
     f0 = table.equilibrium_state(T_e=4.0e+4)
 
     print('START test_reachequlibrium_state_multisteps:')
@@ -148,16 +157,24 @@ def test_reachequlibrium_state_multisteps(natom=8):
     print(f'NEI:', ft)
     print(f'Sum(ft) = ', np.sum(ft))
 
+    assert np.isclose(np.sum(ft), 1)
+
     print(f"EI :", table.equilibrium_state(T_e=te0))
     print("End Test.\n")
 
-def test_element_range():
+# Temporarily test only lighter elements due to Travis CI delays
+
+#@pytest.mark.parametrize('atomic_numb', np.arange(1, 27))
+@pytest.mark.parametrize('atomic_numb', np.arange(1, 10))
+def test_element_range(atomic_numb):
     """
     Function test_element_range:
         This function is used to test element including Hydrogen to Iron.
     """
-    atomic_numb = np.linspace(1, 26, 26, endpoint=True)
-    for i in atomic_numb:
-        element_symbol = atomic.atomic_symbol(int(i))
-        eigen = nei.EigenData2(element=element_symbol)
-        print(f'Element: ', element_symbol)
+    try:
+        element_symbol = atomic.atomic_symbol(int(atomic_numb))
+        eigen = EigenData2(element=element_symbol)
+    except Exception as exc:
+        raise Exception(f"Problem with atomic number={atomic_numb}.") from exc
+
+    eigen=0  # attempt to clear up memory

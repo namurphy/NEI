@@ -184,8 +184,10 @@ class Simulation:
         self._time = self._time[0:nsteps]
 
         for element in self.elements:
-            self._ionic_fractions[element] = self._ionic_fractions[element][0:nsteps, :]
-            self._number_densities[element] = self._number_densities[element][0:nsteps, :]
+            self._ionic_fractions[element] = \
+                self._ionic_fractions[element][0:nsteps, :]
+            self._number_densities[element] = \
+                self._number_densities[element][0:nsteps, :]
 
         self._last_step = nsteps - 1
 
@@ -373,30 +375,32 @@ class NEI:
     >>> inputs = {'H': [0.9, 0.1], 'He': [0.9, 0.099, 0.001]}
     >>> abund = {'H': 1, 'He': 0.085}
     >>> n = np.array([1e9, 1e8]) * u.cm ** -3
-    >>> T_e = np.array([5000, 50000]) * u.K
-    >>> time_input = np.array([0, 10]) * u.min
+    >>> T_e = np.array([10000, 40000]) * u.K
+    >>> time = np.array([0, 300]) * u.s
+    >>> dt = 0.25 * u.s
 
     The initial conditions can be accessed using the initial attribute.
 
-    >>> sim = NEI(inputs=inputs, abundances=abund, n=n, T_e=T_e, time_input=time_input, adapt_dt=False, dt=1*u.min)
+    >>> sim = NEI(inputs=inputs, abundances=abund, n=n, T_e=T_e, time_input=time, adapt_dt=False, dt=dt)
 
     After having inputted all of the necessary information, we can run
     the simulation.
 
-    >>> sim.simulate()
+    >>> results = sim.simulate()
 
     The initial results are stored in the `initial` attribute.
 
     >>> sim.initial.ionic_fractions['H']
+    array([0.9, 0.1])
 
     The final results can be access with the `final` attribute.
 
     >>> sim.final.ionic_fractions['H']
-    array([0.87323978, 0.12676022])
+    array([0.16665179, 0.83334821])
     >>> sim.final.ionic_fractions['He']
-    array([0.89964062, 0.09936038, 0.00099899])
+    array([0.88685261, 0.11218358, 0.00096381])
     >>> sim.final.T_e
-    <Quantity 50000. K>
+    <Quantity 40000. K>
 
     Both `initial` and `final` are instances of the `IonizationStates`
     class.
@@ -418,7 +422,7 @@ class NEI:
             time_input: u.Quantity = None,
             time_start: u.Quantity = None,
             time_max: u.Quantity = None,
-            max_steps: Union[int, np.integer] = 1000,
+            max_steps: Union[int, np.integer] = 10000,
             tol: Union[int, float] = 1e-15,
             dt: u.Quantity = None,
             adapt_dt: bool = None,
@@ -564,7 +568,6 @@ class NEI:
 
         # TODO: Update initial and other attributes when abundances is
         # updated.
-        #
 
         self._abundances = abund
 
@@ -928,7 +931,13 @@ class NEI:
         """
         Perform a non-equilibrium ionization simulation.
 
-        Returns the
+        Returns
+        -------
+        results: ~nei.classes.Simulation
+            The results from the simulation (which are also stored in
+            the `results` attribute of the `~nei.classes.NEI` instance
+            this method was called from.
+
         """
 
         self._initialize_simulation()
@@ -964,6 +973,13 @@ class NEI:
             T_e=self.results.T_e[-1],
             tol=1e-6,
         )
+
+        if not np.isclose(self.time_max/u.s, self.results.time[-1]/u.s):
+            warnings.warn(
+                f"The simulation ended at {self.results.time[-1]}, "
+                f"which is prior to time_max = {self.time_max}."
+            )
+
 
     def set_timestep(self, dt: u.Quantity = None):
         if dt is not None:
@@ -1060,7 +1076,7 @@ class NEI:
         """
         raise NotImplementedError
 
-    
+
     def visual(self, element):
         """
         Returns an atomic object used for plotting protocols
@@ -1074,7 +1090,7 @@ class NEI:
         ------
         Class object
         """
-        
+
         plot_obj = Visualize(element, self.results)
 
         return plot_obj
@@ -1088,7 +1104,7 @@ class NEI:
         index: array-like
                A value or array of values representing the index of
                the time array created by the simulation
-        
+
         Returns
         ------
         get_time: astropy.units.Quantity
@@ -1106,14 +1122,14 @@ class NEI:
         time: array-like,
                A value or array of values representing the values of
                the time array created by the simulation
-        
+
         Returns
         ------
         index: int or array-like,
                   The index value associated with the time input(s)
         """
-
         index = (np.abs(self.results.time.value - time)).argmin()
+
 
         return index
 
@@ -1141,7 +1157,7 @@ class Visualize(NEI):
                  The elemental symbal of the atom (i.e. 'H'),
         ion: array-like, dtype=int
              The repective integer charge of the atomic particle (i.e. 0 or [0,1])
-        
+
         time_sequence: ~astropy.units.Quantity ,
                        The time array at which we will be plotting over
 
@@ -1155,7 +1171,6 @@ class Visualize(NEI):
             time = time_sequence.to(u.s)
         except TypeError:
             print("Invalid time units")
-
         
         if ion == 'all':
             charge_states = pl.atomic.atomic_number(self.element) + 1
@@ -1214,7 +1229,7 @@ class Visualize(NEI):
         fig, ax = plt.subplots()
         if isinstance(time_index, (list, np.ndarray)):
 
-            
+
             alpha = 1.0
             colors = ['blue', 'red']
 
@@ -1232,8 +1247,10 @@ class Visualize(NEI):
             ax.set_xticks(x-width/2.0)
             ax.set_xticklabels(x)
             ax.set_title(f'{self.element}')
+
             ax.set_xlabel('Charge State')
             ax.set_ylabel('Ionic Fraction') 
+    
             ax.legend(loc='best')
             #plt.show()
 
@@ -1319,7 +1336,8 @@ class Visualize(NEI):
 
 
 
-        
+
+
 
 
 
