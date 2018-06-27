@@ -899,16 +899,7 @@ class NEI:
                   The time value associated with index input(s)
         """
 
-        index_arr = []
-        time_arr = []
-
-        for idx, val in enumerate(self.results.time.value):
-            index_arr.append(idx)
-            time_arr.append(val)
-
-        get_time = interpolate.interp1d(index_arr, time_arr)
-
-        return get_time(index)*u.s
+        return self.results.time[index]
 
     def time_to_index(self, time):
         """
@@ -916,34 +907,33 @@ class NEI:
 
         Parameters
         ------
-        time: array-like
+        time: array-like,
                A value or array of values representing the values of
                the time array created by the simulation
         
         Returns
         ------
-        get_index: array-like,
+        index: int or array-like,
                   The index value associated with the time input(s)
         """
 
-        index_arr = []
-        time_arr = []
+        index = (np.abs(self.results.time.value - time)).argmin()
 
-        for idx, val in enumerate(self.results.time.value):
-            index_arr.append(idx)
-            time_arr.append(val)
+        return index
 
-        get_time = interpolate.interp1d(time_arr, index_arr)
-
-        return np.array(get_time(time), dtype=int)
-
-class Visualize:
+class Visualize(NEI):
     """
     Store plotting results from the simulation
     """
     def __init__(self, element, results):
         self.element = element
         self.results = results
+
+    def index_to_time(self, index):
+        """
+        Inherits the index_to_time method of the NEI class
+        """
+        return super(Visualize, self).index_to_time(index)
 
     def ionicfrac_evol_plot(self,time_sequence, ion='all'):
         """
@@ -1011,8 +1001,6 @@ class Visualize:
 
         Parameters
         ------
-        element: str,
-                 The elemental symbol of the atom (i.e. 'H')
         time_index: int,
                     The particular time index at which to collect the various ion fractiom
                     change
@@ -1033,13 +1021,22 @@ class Visualize:
             
             alpha = 1.0
             colors = ['blue', 'red']
+
+            #Color index counter
+            c_idx = 1
+
             for idx in time_index:
+                
+                #Toggle between zero and one for colors array 
+                c_idx ^= 1
+
                 ax.bar(x, self.results.ionic_fractions[self.element][idx,:], alpha=alpha, \
-                        width=width, color=colors[idx], label=f'Time:{idx} s')
-                alpha -= 0.4
+                        width=width, color=colors[c_idx], label=f'Time:{self.index_to_time(idx)}')
+                alpha -= 0.2
             ax.set_xticks(x-width/2.0)
             ax.set_xticklabels(x)
             ax.set_title(f'{self.element}')
+            ax.set_xlabel('Charge State')
             ax.set_ylabel('Ionic Fraction') 
             ax.legend(loc='best')
             #plt.show()
