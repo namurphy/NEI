@@ -1139,7 +1139,7 @@ class Visualize(NEI):
     """
     def __init__(self, element, results):
         self.element = element
-        self.results = results
+        self._results = results
 
     def index_to_time(self, index):
         """
@@ -1222,7 +1222,7 @@ class Visualize(NEI):
 
         ion = pl.atomic.atomic_number(self.element)
 
-        x = np.linspace(0, ion, ion+1, dtype=np.int16)
+        charge_states = np.linspace(0, ion, ion+1, dtype=np.int16)
 
         width=1.0
 
@@ -1238,14 +1238,14 @@ class Visualize(NEI):
 
             for idx in time_index:
                 
-                #Toggle between zero and one for colors array 
+                #Toggle between zero and one for colors array
                 color_idx ^= 1
 
-                ax.bar(x, self.results.ionic_fractions[self.element][idx,:], alpha=alpha, \
+                ax.bar(charge_states, self.results.ionic_fractions[self.element][idx,:], alpha=alpha, \
                         width=width, color=colors[color_idx], label=f'Time:{self.index_to_time(idx)}')
                 alpha -= 0.2
-            ax.set_xticks(x-width/2.0)
-            ax.set_xticklabels(x)
+            ax.set_xticks(charge_states-width/2.0)
+            ax.set_xticklabels(charge_states)
             ax.set_title(f'{self.element}')
 
             ax.set_xlabel('Charge State')
@@ -1256,8 +1256,8 @@ class Visualize(NEI):
 
         else:
             ax.bar(x, self.results.ionic_fractions[self.element][time_index,:], alpha=1.0, width=width)
-            ax.set_xticks(x-width/2.0)
-            ax.set_xticklabels(x)
+            ax.set_xticks(charge_states-width/2.0)
+            ax.set_xticklabels(charge_states)
             ax.set_title(f'{self.element}')
             ax.set_xlabel('Charge State')
             ax.set_ylabel('Ionic Fraction') 
@@ -1335,7 +1335,3 @@ class Visualize(NEI):
         plt.xlabel('Mach Number')
         plt.ylabel('Log Temperature (K)')
         #plt.show()
-
-
-
-
