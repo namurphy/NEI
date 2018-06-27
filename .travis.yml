@@ -7,10 +7,12 @@ git:
 
 # Install dependencies
 install:
+        - df -h
         - git clone git://github.com/astropy/ci-helpers.git --depth 1
         - source ci-helpers/travis/setup_conda.sh
         - pip install -r requirements/requirements.txt
         - pip install codecov flake8 pytest-cov pytest-astropy
+        - df -h
 
 before_script:
     # stop the build if there are Python syntax errors or undefined names
@@ -21,6 +23,7 @@ before_script:
 script: python setup.py test --coverage
 
 after_success:
+    - df -h
     - codecov
 
 # We set the language to c because python isn't supported on the MacOS X nodes

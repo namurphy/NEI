@@ -1,5 +1,7 @@
-numpy (>= 1.14)
-scipy (>= 1.0)
-astropy (>= 2.0)
-matplotlib (>= 2.0)
-cython
+numpy (>= 1.14.0)
+scipy (>= 1.0.0)
+astropy (>= 3.0.0)
+matplotlib (>= 2.0.0)
+cython (>= 0.28.0)
+plasmapy (>= 0.1.1)
+h5py (>= 2.8.0)
