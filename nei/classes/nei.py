@@ -1219,15 +1219,15 @@ class Visualize(NEI):
             colors = ['blue', 'red']
 
             #Color index counter
-            c_idx = 1
+            color_idx = 1
 
             for idx in time_index:
                 
                 #Toggle between zero and one for colors array 
-                c_idx ^= 1
+                color_idx ^= 1
 
                 ax.bar(x, self.results.ionic_fractions[self.element][idx,:], alpha=alpha, \
-                        width=width, color=colors[c_idx], label=f'Time:{self.index_to_time(idx)}')
+                        width=width, color=colors[color_idx], label=f'Time:{self.index_to_time(idx)}')
                 alpha -= 0.2
             ax.set_xticks(x-width/2.0)
             ax.set_xticklabels(x)
@@ -1242,8 +1242,10 @@ class Visualize(NEI):
             ax.set_xticks(x-width/2.0)
             ax.set_xticklabels(x)
             ax.set_title(f'{self.element}')
+            ax.set_xlabel('Charge State')
             ax.set_ylabel('Ionic Fraction') 
             #plt.show()
+
     
     def rh_density_plot(self, gamma, mach, ion='None'):
         """
