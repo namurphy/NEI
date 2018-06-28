@@ -4,7 +4,7 @@ from typing import Union, Optional, List, Dict, Callable
 import astropy.units as u
 import plasmapy as pl
 import collections
-from scipy import interpolate
+from scipy import interpolate, optimize
 from .eigenvaluetable import EigenData2
 from .ionization_states import IonizationStates
 import warnings
@@ -345,6 +345,8 @@ class NEI:
         The time step.  If `adapt_dt` is `False`, then `dt` is the time
         step for the whole simulation.
 
+    dt_max
+
     adapt_dt: `bool`
         If `True`, change the time step based on the characteristic
         ionization and recombination time scales and change in
@@ -424,6 +426,7 @@ class NEI:
             max_steps: Union[int, np.integer] = 10000,
             tol: Union[int, float] = 1e-15,
             dt: u.Quantity = None,
+            dt_max: u.Quantity = None,
             adapt_dt: bool = None,
             safety_factor: Union[int, float] = 1,
             verbose: bool = False,
@@ -438,7 +441,8 @@ class NEI:
             self.n_input = n
             self.max_steps = max_steps
             self.dt_input = dt
-            self._dt = dt
+            self._dt = self.dt_input
+            self.dt_max = dt_max
             self.adapt_dt = adapt_dt
             self.safety_factor = safety_factor
             self.verbose = verbose
@@ -470,6 +474,12 @@ class NEI:
                 for element in self.initial.elements:
                     self.initial.ionic_fractions[element] = \
                         self.EigenDataDict[element].equilibrium_state(T_e_init.value)
+
+            self._temperature_grid = \
+                self._EigenDataDict[self.elements[0]].temperature_grid
+
+            self._get_temperature_index = \
+                self._EigenDataDict[self.elements[0]]._get_temperature_index
 
         except Exception:
             raise NEIError(
@@ -667,13 +677,12 @@ class NEI:
     @property
     def dt_input(self) -> Optional[u.Quantity]:
         """Return the inputted time step."""
-        return self._dt
+        return self._dt_input
 
     @dt_input.setter
     def dt_input(self, dt: Optional[u.Quantity]):
         if dt is None:
             self._dt_input = None
-            self._dt = None
         elif isinstance(dt, u.Quantity):
             try:
                 dt = dt.to(u.s)
@@ -979,19 +988,156 @@ class NEI:
                 f"which is prior to time_max = {self.time_max}."
             )
 
+    def _set_adaptive_timestep(self):
+        """Adapt the time step."""
+
+        t = self._new_time if hasattr(self, '_new_time') else self.t_start
+
+        print(f"\nSetting adaptive timestep at {t}.\n")
+        print(f"t = {t}")
+
+        t_stop = self.time_max
+        # We need to guess the timestep in order to narrow down what the
+        # timestep should be.  If we are in the middle of a simulation,
+        # we can use the old timestep as a reasonable guess.  If we are
+        # simulation, then we can either use the inputted timestep or
+        # estimate it from other inputs.
+
+        if self._dt:
+            dt_guess = self._dt
+        elif self._dt_input:
+            dt_guess = self._dt_input
+        else:
+            dt_guess = self.time_max / self.max_steps
+
+        # Make sure that dt_guess does not lead to a time that is out
+        # of the domain.
+
+        dt_guess = dt_guess if t + dt_guess <= self.time_max - t else self.time_max - t
+
+        print(f"dt_guess = {dt_guess}")
+
+        # The temperature may start out exactly at the boundary of a
+        # bin, so we check what bin it is in just slightly after.
+
+        T = self.electron_temperature(t + 1e-9 * dt_guess)
+        index = self._get_temperature_index(T.to(u.K).value)
+        T_nearby = np.array(self._temperature_grid[index-1:index+2]) * u.K
+        T_boundary = (T_nearby[0:-1] + T_nearby[1:]) / 2
+
+        print(f"T = {T}")
+        print(f"index = {index}")
+        print(f"T_nearby = {T_nearby}")
+        print(f"T_boundary = {T_boundary}")
+
+        assert T_nearby[0] < T_nearby[1] < T_nearby[2]
+        assert T_boundary[0] < T_boundary[1]
+
+        assert len(T_nearby) == 3
+
+        # In order to use Brent's method, we must bound the root's
+        # location.  Functions may change sharply or slowly, so we test
+        # different times that are logarithmically spaced to find the
+        # first one that is outside of the boundary.
+
+        dt_spread = np.geomspace(1e-6 * dt_guess.value, (t_stop - t).value, num=15) * u.s
+        time_spread = t + dt_spread
+        T_spread = [self.electron_temperature(time) for time in time_spread]
+        in_range = [T_boundary[0] <= temp <= T_boundary[1] for temp in T_spread]
+
+        if all(in_range):
+            self._dt = self.time_max - t
+            print(f"self._dt = {self._dt}")
+            return
+
+        # Find the first index in time_spread/T_spread for which
+        first_false_index = in_range.index(False)
+
+#        print(f"dt_spread = {dt_spread}")
+#        print(f"time_spread = {time_spread}")
+#        print(f"T_spread = {T_spread}")
+#        print(f"in_range = {in_range}")
+        print(f"first_false_index = {first_false_index}")
+
+        assert not in_range[first_false_index]
+        assert (T_boundary[0] <= T_spread[first_false_index - 1] <= T_boundary[1])
+        assert not (T_boundary[0] <= T_spread[first_false_index] <= T_boundary[1])
+
+        times_bounding_root = time_spread[first_false_index-1:first_false_index+1]
+
+        print(f"times_bounding_root = {times_bounding_root}")
+
+        # Find which temperature bin boundary is being crossed.
+
+        T_at_time_bounds = [self.electron_temperature(time) for time in times_bounding_root]
+
+        assert T_boundary[0] <= T_at_time_bounds[0] <= T_boundary[1]
+        assert not (T_boundary[0] <= T_at_time_bounds[1] <= T_boundary[1])
+
+        print(f"T_at_time_bounds = {T_at_time_bounds}")
+
+        boundary_index = int(T_at_time_bounds[0] < T_at_time_bounds[1])
+
+        print(f"boundary_index = {boundary_index}")
+
+        T_at_boundary = T_boundary[boundary_index]
+
+        print(f"T_at_boundary = {T_at_boundary}")
+
+        # Now to find the root!
+
+#        try:
+#            T_val = lambda dtval: (self.electron_temperature(t+dtval*u.s) - T_at_boundary).value
+#        except Exception:
+#            raise
+#        else:
+#            print(T_val)
+
+        def T_val(dtval):
+            print(f'dtval = {dtval}')
+            resulting_quantity = (self.electron_temperature(t + dtval*u.s) - T_at_boundary).to(u.K)
+            print(f'T_val({dtval}) = {resulting_quantity}')
+            return resulting_quantity.value
+
+        try:
+            print("Attemting to find root.")
+            print(T_val(times_bounding_root[0].value) - T_at_boundary.value,
+                  T_val(times_bounding_root[1].value) - T_at_boundary.value)
+            new_dt = optimize.brentq(
+                T_val,
+                times_bounding_root[0].value - 1e-4,
+                times_bounding_root[1].value + 1e-4,
+                xtol=1e-13,
+                maxiter=20000,
+                disp=True,
+            ) * u.s
+            print(f"new_dt = {new_dt}")
+        except Exception as exc:
+            raise RuntimeError(f"Unable to find new dt at t = {t}") from exc
+        else:
+            if np.isnan(new_dt.value):
+                raise RuntimeError(f"new_dt = {new_dt}")
+
+        print("Assigning self._dt")
+
+        self._dt = new_dt.to(u.s) * 1.01
+
+        print(f"self._dt = {self._dt}")
 
     def set_timestep(self, dt: u.Quantity = None):
+
         if dt is not None:
             try:
                 dt = dt.to(u.s)
-            except Exception:
-                raise NEIError(f"{dt} is not a valid timestep.")
+            except Exception as exc:
+                raise NEIError(f"{dt} is not a valid timestep.") from exc
             finally:
                 self._dt = dt
         elif self.adapt_dt:
-            raise NotImplementedError(
-                "Adaptive time step not yet implemented; set adapt_dt "
-                "to False.")
+            try:
+                self._set_adaptive_timestep()
+            except Exception as exc:
+                raise RuntimeError("Unable to set adaptive timestep.") from exc
         elif self.dt_input is not None:
             self._dt = self.dt_input
         else:
@@ -999,6 +1145,9 @@ class NEI:
 
         self._old_time = self._new_time
         self._new_time = self._old_time + self._dt
+
+        print(f"self._old_time = {self._old_time}")
+        print(f"self._new_time = {self._new_time}")
 
         if self._old_time >= self.time_max:
             raise StopIteration
@@ -1017,7 +1166,7 @@ class NEI:
 
         step = self.results._index
         T_e = self.results.T_e[step - 1].value
-        n_e = self.results.n_e[step - 1].value
+        n_e = self.results.n_e[step - 1].value  # set average
         dt = self._dt.value
 
         if self.verbose:

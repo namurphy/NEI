@@ -122,7 +122,18 @@ tests = {
         'adapt_dt': False,
         'verbose': True,
         'max_steps': 2
-    }
+    },
+
+    'adapt dt': {
+        'inputs': ['H', 'He'],
+        'abundances': {'H': 1, 'He': 0.1},
+        'T_e': lambda t: u.K * (1e6 + 1e5*np.cos(t.value)),
+        'n': 1e9 * u.cm ** -3,
+        'max_steps': 1000,
+        'time_start': 0 * u.s,
+        'time_max': np.pi * u.s,
+        'adapt_dt': True,
+    },
 }
 
 test_names = list(tests.keys())
