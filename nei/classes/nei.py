@@ -751,7 +751,9 @@ class NEI:
             raise TypeError
         if not time.unit.physical_type == 'time':
             raise u.UnitsError(f"{time} is not a valid time.")
-        return self.time_start <= time <= self.time_max
+        return self.time_start <= time <= self.time_max or \
+               np.isclose(time.value, self.time_start.value) or \
+               np.isclose(time.value, self.time_max.value)
 
     @property
     def max_steps(self) -> int:
@@ -814,8 +816,8 @@ class NEI:
 
     def electron_temperature(self, time: u.Quantity) -> u.Quantity:
         try:
-            if not self.in_time_interval(time):
-                raise NEIError("Not in simulation time interval.")
+#            if not self.in_time_interval(time):
+#                raise NEIError("Not in simulation time interval.")
             T_e = self._electron_temperature(time.to(u.s))
             if np.isnan(T_e) or np.isinf(T_e) or T_e < 0 * u.K:
                 raise NEIError(f"T_e = {T_e} at time = {time}.")
@@ -993,46 +995,49 @@ class NEI:
 
         t = self._new_time if hasattr(self, '_new_time') else self.t_start
 
-        print(f"\nSetting adaptive timestep at {t}.\n")
-        print(f"t = {t}")
+#        if np.isclose(t.value, self.time_max.to(u.s).value):
+#            raise StopIteration
 
-        t_stop = self.time_max
+        print(f"\nSetting adaptive timestep at t = {t}.\n")
+
         # We need to guess the timestep in order to narrow down what the
         # timestep should be.  If we are in the middle of a simulation,
         # we can use the old timestep as a reasonable guess.  If we are
         # simulation, then we can either use the inputted timestep or
         # estimate it from other inputs.
 
-        if self._dt:
-            dt_guess = self._dt
-        elif self._dt_input:
-            dt_guess = self._dt_input
-        else:
-            dt_guess = self.time_max / self.max_steps
+        dt_guess = self._dt if self._dt \
+            else self._dt_input if self._dt_input \
+            else self.time_max / self.max_steps
 
         # Make sure that dt_guess does not lead to a time that is out
         # of the domain.
 
         dt_guess = dt_guess if t + dt_guess <= self.time_max - t else self.time_max - t
 
-        print(f"dt_guess = {dt_guess}")
+#        print(f"  dt_guess = {dt_guess}")
 
         # The temperature may start out exactly at the boundary of a
         # bin, so we check what bin it is in just slightly after.
+
+        print(self.electron_temperature(t))
 
         T = self.electron_temperature(t + 1e-9 * dt_guess)
         index = self._get_temperature_index(T.to(u.K).value)
         T_nearby = np.array(self._temperature_grid[index-1:index+2]) * u.K
         T_boundary = (T_nearby[0:-1] + T_nearby[1:]) / 2
 
-        print(f"T = {T}")
-        print(f"index = {index}")
-        print(f"T_nearby = {T_nearby}")
-        print(f"T_boundary = {T_boundary}")
+#        print(f"  T = {T}")
+#        print(f"  index = {index}")
+#        print(f"  T_nearby = {T_nearby}")
+#        print(f"  T_boundary = {T_boundary}")
 
         assert T_nearby[0] < T_nearby[1] < T_nearby[2]
-        assert T_boundary[0] < T_boundary[1]
 
+        if not T_boundary[0] <= T <= T_boundary[1]:
+            raise ValueError("The temperature ")
+
+        assert T_boundary[0] < T < T_boundary[1]
         assert len(T_nearby) == 3
 
         # In order to use Brent's method, we must bound the root's
@@ -1040,14 +1045,13 @@ class NEI:
         # different times that are logarithmically spaced to find the
         # first one that is outside of the boundary.
 
-        dt_spread = np.geomspace(1e-6 * dt_guess.value, (t_stop - t).value, num=15) * u.s
+        dt_spread = np.geomspace(1e-6 * dt_guess.value, (self.time_max - t).value, num=302) * u.s
         time_spread = t + dt_spread
         T_spread = [self.electron_temperature(time) for time in time_spread]
         in_range = [T_boundary[0] <= temp <= T_boundary[1] for temp in T_spread]
 
         if all(in_range):
             self._dt = self.time_max - t
-            print(f"self._dt = {self._dt}")
             return
 
         # Find the first index in time_spread/T_spread for which
@@ -1057,60 +1061,85 @@ class NEI:
 #        print(f"time_spread = {time_spread}")
 #        print(f"T_spread = {T_spread}")
 #        print(f"in_range = {in_range}")
-        print(f"first_false_index = {first_false_index}")
+#        print(f"  first_false_index = {first_false_index}")
 
+        T_first_outside = self.electron_temperature(time_spread[first_false_index])
+
+        if T_first_outside >= T_boundary[1]:
+            boundary_index = 1
+        elif T_first_outside <= T_boundary[0]:
+            boundary_index = 0
+        else:
+            raise RuntimeError(
+                f"T_first_outside = {T_first_outside}\n"
+                f"T_boundary[0] = {T_boundary[0]}\n"
+                f"T_boundary[1] = {T_boundary[1]}"
+            )
+
+        assert in_range[first_false_index-1]
         assert not in_range[first_false_index]
         assert (T_boundary[0] <= T_spread[first_false_index - 1] <= T_boundary[1])
         assert not (T_boundary[0] <= T_spread[first_false_index] <= T_boundary[1])
 
         times_bounding_root = time_spread[first_false_index-1:first_false_index+1]
 
-        print(f"times_bounding_root = {times_bounding_root}")
+#        print(f"  times_bounding_root = {times_bounding_root}")
 
         # Find which temperature bin boundary is being crossed.
 
         T_at_time_bounds = [self.electron_temperature(time) for time in times_bounding_root]
 
         assert T_boundary[0] <= T_at_time_bounds[0] <= T_boundary[1]
-        assert not (T_boundary[0] <= T_at_time_bounds[1] <= T_boundary[1])
+#        boundary_index = int(T_at_time_bounds[0] < T_at_time_bounds[1])
+#        T_at_boundary = T_boundary[boundary_index]
 
-        print(f"T_at_time_bounds = {T_at_time_bounds}")
+        # Change to checks rather than assert statements
 
-        boundary_index = int(T_at_time_bounds[0] < T_at_time_bounds[1])
+#        assert T_boundary[0] <= T_at_time_bounds[0] <= T_boundary[1]
+#        assert not (T_boundary[0] <= T_at_time_bounds[1] <= T_boundary[1])
 
-        print(f"boundary_index = {boundary_index}")
-
-        T_at_boundary = T_boundary[boundary_index]
-
-        print(f"T_at_boundary = {T_at_boundary}")
+#        print(f"  T_at_time_bounds = {T_at_time_bounds}")
+#        print(f"  boundary_index = {boundary_index}")
+#        print(f"  T_at_boundary = {T_at_boundary}")
 
         # Now to find the root!
 
-#        try:
-#            T_val = lambda dtval: (self.electron_temperature(t+dtval*u.s) - T_at_boundary).value
-#        except Exception:
-#            raise
-#        else:
-#            print(T_val)
-
         def T_val(dtval):
-            print(f'dtval = {dtval}')
-            resulting_quantity = (self.electron_temperature(t + dtval*u.s) - T_at_boundary).to(u.K)
-            print(f'T_val({dtval}) = {resulting_quantity}')
-            return resulting_quantity.value
+#            resulting_quantity = (self.electron_temperature(t + dtval*u.s) - T_at_boundary).to(u.K)
+#            print(f'T_val({dtval}) = {resulting_quantity}')
+            T = self.electron_temperature(t + dtval*u.s)
+            zero_if_root = (T - T_boundary[boundary_index]) #* (T - T_boundary[1])
+            return zero_if_root.value
+
+#        print(T_at_time_bounds)
+
+#        print(T_val(times_bounding_root[0].value),
+#              T_val(times_bounding_root[1].value))
+
+#        assert T_val(times_bounding_root[0].value) \
+#            * T_val(times_bounding_root[1].value) <= 0
+
+
+#        tight_time_bounds =
+#        loose_time_bounds = time_spread[0].value
 
         try:
+
             print("Attemting to find root.")
-            print(T_val(times_bounding_root[0].value) - T_at_boundary.value,
-                  T_val(times_bounding_root[1].value) - T_at_boundary.value)
+
             new_dt = optimize.brentq(
                 T_val,
-                times_bounding_root[0].value - 1e-4,
-                times_bounding_root[1].value + 1e-4,
-                xtol=1e-13,
+                dt_spread[first_false_index-1].value,
+                np.min([dt_spread[first_false_index].value, self.time_max.value]),
+                xtol=1e-9,
                 maxiter=20000,
                 disp=True,
             ) * u.s
+
+#            t_guess = (times_bounding_root[0].value + times_bounding_root[1].value)/2
+
+#            new_dt = optimize.newton(T_val, t_guess, tol=1e-10) * u.s
+
             print(f"new_dt = {new_dt}")
         except Exception as exc:
             raise RuntimeError(f"Unable to find new dt at t = {t}") from exc
@@ -1118,9 +1147,9 @@ class NEI:
             if np.isnan(new_dt.value):
                 raise RuntimeError(f"new_dt = {new_dt}")
 
-        print("Assigning self._dt")
+#        print("Assigning self._dt")
 
-        self._dt = new_dt.to(u.s) * 1.01
+        self._dt = new_dt.to(u.s)
 
         print(f"self._dt = {self._dt}")
 
@@ -1129,6 +1158,7 @@ class NEI:
         if dt is not None:
             try:
                 dt = dt.to(u.s)
+
             except Exception as exc:
                 raise NEIError(f"{dt} is not a valid timestep.") from exc
             finally:
@@ -1138,6 +1168,8 @@ class NEI:
                 self._set_adaptive_timestep()
             except Exception as exc:
                 raise RuntimeError("Unable to set adaptive timestep.") from exc
+            if np.isclose(self._dt.value, 0):
+                raise StopIteration
         elif self.dt_input is not None:
             self._dt = self.dt_input
         else:
