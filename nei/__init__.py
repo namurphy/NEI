@@ -22,3 +22,4 @@ if not _ASTROPY_SETUP_:
     # For egg_info test builds to pass, put package imports here.
     from .time_advance import *
     from .classes import *
+    from nei.physics import shocks
