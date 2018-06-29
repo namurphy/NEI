@@ -127,11 +127,11 @@ tests = {
     'adapt dt': {
         'inputs': ['H', 'He'],
         'abundances': {'H': 1, 'He': 0.1},
-        'T_e': lambda t: u.K * (1e6 + 1e5*np.cos(t.value)),
-        'n': 1e9 * u.cm ** -3,
-        'max_steps': 1000,
+        'T_e': lambda t: u.K * (1e6 + 1e4*np.sin(t.value)),
+        'n': 1e10 * u.cm ** -3,
+        'max_steps': 200,
         'time_start': 0 * u.s,
-        'time_max': np.pi * u.s,
+        'time_max': 2*np.pi * u.s,
         'adapt_dt': True,
     },
 }
