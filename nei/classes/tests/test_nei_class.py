@@ -127,9 +127,9 @@ tests = {
     'adapt dt': {
         'inputs': ['H', 'He'],
         'abundances': {'H': 1, 'He': 0.1},
-        'T_e': lambda t: u.K * (1e6 + 1e4*np.sin(t.value)),
+        'T_e': lambda t: u.K * (1e6 + 1.3e4*np.sin(t.value)),
         'n': 1e10 * u.cm ** -3,
-        'max_steps': 200,
+        'max_steps': 300,
         'time_start': 0 * u.s,
         'time_max': 2*np.pi * u.s,
         'adapt_dt': True,
@@ -246,6 +246,9 @@ class TestNEI:
         got_to_max_steps = len(time) == instance.max_steps + 1
         got_to_time_max = np.isclose(time[-1].value, instance.time_max.value)
 
+        if time.isscalar or len(time) == 1:
+            raise Exception(f"The only element in results.time is {time}")
+
         if not got_to_max_steps and not got_to_time_max:
             print(f"time = {time}")
             print(f"max_steps = {max_steps}")
@@ -278,3 +281,15 @@ class TestNEI:
         assert initial.abundances == results.abundances
         for elem in initial.elements:
             assert np.allclose(results.ionic_fractions[elem][0, :], initial.ionic_fractions[elem])
+
+    @pytest.mark.parametrize('test_name', test_names)
+    def test_final_results(self, test_name):
+        #initial = self.instances[test_name].initial
+        final = self.instances[test_name].final
+        results = self.instances[test_name].results
+        assert final.elements == results.elements
+        assert final.abundances == results.abundances
+        for elem in final.elements:
+            assert np.allclose(
+                results.ionic_fractions[elem][-1, :], final.ionic_fractions[elem]
+            )
