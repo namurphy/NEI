@@ -346,7 +346,11 @@ class NEI:
         The time step.  If `adapt_dt` is `False`, then `dt` is the time
         step for the whole simulation.
 
-    dt_max
+    dt_max: `~astropy.units.Quantity`
+        The maximum time step to be used with an adaptive time step.
+
+    dt_min: `~astropy.units.Quantity`
+        The minimum time step to be used with an adaptive time step.
 
     adapt_dt: `bool`
         If `True`, change the time step based on the characteristic
@@ -427,7 +431,8 @@ class NEI:
             max_steps: Union[int, np.integer] = 10000,
             tol: Union[int, float] = 1e-15,
             dt: u.Quantity = None,
-            dt_max: u.Quantity = None,
+            dt_max: u.Quantity = np.inf * u.s,
+            dt_min: u.Quantity = 0 * u.s,
             adapt_dt: bool = None,
             safety_factor: Union[int, float] = 1,
             verbose: bool = False,
@@ -442,7 +447,13 @@ class NEI:
             self.n_input = n
             self.max_steps = max_steps
             self.dt_input = dt
-            self._dt = self.dt_input
+
+            if self.dt_input is None:
+                self._dt = self.time_max / max_steps
+            else:
+                self._dt = self.dt_input
+
+            self.dt_min = dt_min
             self.dt_max = dt_max
             self.adapt_dt = adapt_dt
             self.safety_factor = safety_factor
@@ -676,6 +687,24 @@ class NEI:
             raise TypeError("Invalid time_max.") from None
 
     @property
+    def adapt_dt(self) -> Optional[bool]:
+        """
+        Return `True` if the time step is set to be adaptive, `False`
+        if the time step is set to not be adapted, and `None` if this
+        attribute was not set.
+        """
+        return self._adapt_dt
+
+    @adapt_dt.setter
+    def adapt_dt(self, choice: Optional[bool]):
+        if choice is None:
+            self._adapt_dt = True if self.dt_input is None else False
+        elif choice is True or choice is False:
+            self._adapt_dt = choice
+        else:
+            raise TypeError("Invalid value for adapt_dt")
+
+    @property
     def dt_input(self) -> Optional[u.Quantity]:
         """Return the inputted time step."""
         return self._dt_input
@@ -693,22 +722,44 @@ class NEI:
                 raise NEIError("Invalid dt.")
 
     @property
-    def adapt_dt(self) -> Optional[bool]:
-        """
-        Return `True` if the time step is set to be adaptive, `False`
-        if the time step is set to not be adapted, and `None` if this
-        attribute was not set.
-        """
-        return self._adapt_dt
+    def dt_min(self) -> u.Quantity:
+        return self._dt_min
 
-    @adapt_dt.setter
-    def adapt_dt(self, choice: Optional[bool]):
-        if choice is None:
-            self._adapt_dt = True if self.dt_input is None else False
-        elif choice is True or choice is False:
-            self._adapt_dt = choice
-        else:
-            raise TypeError("Invalid value for adapt_dt")
+    @dt_min.setter
+    def dt_min(self, value: u.Quantity):
+        if not isinstance(value, u.Quantity):
+            raise TypeError("dt_min must be a Quantity.")
+        try:
+            value = value.to(u.s)
+        except u.UnitConversionError as exc:
+            raise u.UnitConversionError("Invalid units for dt_min.")
+        if hasattr(self, '_dt_input') and self.dt_input is not None and self.dt_input < value:
+            raise ValueError(
+                "dt_min cannot exceed the inputted time step.")
+        if hasattr(self, '_dt_max') and self.dt_max < value:
+            raise ValueError(
+                "dt_min cannot exceed dt_max.")
+        self._dt_min = value
+
+    @property
+    def dt_max(self) -> u.Quantity:
+        return self._dt_max
+
+    @dt_max.setter
+    def dt_max(self, value: u.Quantity):
+        if not isinstance(value, u.Quantity):
+            raise TypeError("dt_max must be a Quantity.")
+        try:
+            value = value.to(u.s)
+        except u.UnitConversionError as exc:
+            raise u.UnitConversionError("Invalid units for dt_max.")
+        if hasattr(self, '_dt_input') and self.dt_input is not None and self.dt_input > value:
+            raise ValueError(
+                "dt_max cannot be less the inputted time step.")
+        if hasattr(self, '_dt_min') and self.dt_min > value:
+            raise ValueError(
+                "dt_min cannot exceed dt_max.")
+        self._dt_max = value
 
     @property
     def safety_factor(self):
@@ -996,11 +1047,6 @@ class NEI:
 
         t = self._new_time if hasattr(self, '_new_time') else self.t_start
 
-#        if np.isclose(t.value, self.time_max.to(u.s).value):
-#            raise StopIteration
-
-        print(f"\nSetting adaptive timestep at t = {t}.\n")
-
         # We need to guess the timestep in order to narrow down what the
         # timestep should be.  If we are in the middle of a simulation,
         # we can use the old timestep as a reasonable guess.  If we are
@@ -1016,53 +1062,47 @@ class NEI:
 
         dt_guess = dt_guess if t + dt_guess <= self.time_max - t else self.time_max - t
 
-#        print(f"  dt_guess = {dt_guess}")
-
         # The temperature may start out exactly at the boundary of a
-        # bin, so we check what bin it is in just slightly after.
-
-        print(self.electron_temperature(t))
+        # bin, so we check what bin it is in just slightly after to
+        # figure out which temperature bin the plasma is entering.
 
         T = self.electron_temperature(t + 1e-9 * dt_guess)
+
+        # Find the boundaries to the temperature bin.
+
         index = self._get_temperature_index(T.to(u.K).value)
         T_nearby = np.array(self._temperature_grid[index-1:index+2]) * u.K
         T_boundary = (T_nearby[0:-1] + T_nearby[1:]) / 2
-
-#        print(f"  T = {T}")
-#        print(f"  index = {index}")
-#        print(f"  T_nearby = {T_nearby}")
-#        print(f"  T_boundary = {T_boundary}")
-
-        assert T_nearby[0] < T_nearby[1] < T_nearby[2]
-
-        if not T_boundary[0] <= T <= T_boundary[1]:
-            raise ValueError("The temperature ")
-
-        assert T_boundary[0] < T < T_boundary[1]
-        assert len(T_nearby) == 3
 
         # In order to use Brent's method, we must bound the root's
         # location.  Functions may change sharply or slowly, so we test
         # different times that are logarithmically spaced to find the
         # first one that is outside of the boundary.
 
-        dt_spread = np.geomspace(1e-6 * dt_guess.value, (self.time_max - t).value, num=302) * u.s
+        dt_spread = np.geomspace(1e-9 * dt_guess.value, (self.time_max - t).value, num=100) * u.s
         time_spread = t + dt_spread
         T_spread = [self.electron_temperature(time) for time in time_spread]
         in_range = [T_boundary[0] <= temp <= T_boundary[1] for temp in T_spread]
 
+        # If all of the remaining temperatures are in the same bin, then
+        # the temperature will be roughly constant for the rest of the
+        # simulation.  Take one final long time step, unless it exceeds
+        # dt_max.
+
         if all(in_range):
-            self._dt = self.time_max - t
+            new_dt = self.time_max - t
+            self._dt = new_dt if new_dt <= self.dt_max else self.dt_max
             return
 
-        # Find the first index in time_spread/T_spread for which
+        # Otherwise, we need to find the first index in the spread that
+        # corresponds to a temperature outside of the temperature bin
+        # for this time step.
+
         first_false_index = in_range.index(False)
 
-#        print(f"dt_spread = {dt_spread}")
-#        print(f"time_spread = {time_spread}")
-#        print(f"T_spread = {T_spread}")
-#        print(f"in_range = {in_range}")
-#        print(f"  first_false_index = {first_false_index}")
+        # We need to figure out if the temperature is dropping so that
+        # it crosses the low temperature boundary of the bin, or if it
+        # is rising so that it crosses the high temperature of the bin.
 
         T_first_outside = self.electron_temperature(time_spread[first_false_index])
 
@@ -1070,120 +1110,72 @@ class NEI:
             boundary_index = 1
         elif T_first_outside <= T_boundary[0]:
             boundary_index = 0
-        else:
-            raise RuntimeError(
-                f"T_first_outside = {T_first_outside}\n"
-                f"T_boundary[0] = {T_boundary[0]}\n"
-                f"T_boundary[1] = {T_boundary[1]}"
-            )
 
-        assert in_range[first_false_index-1]
-        assert not in_range[first_false_index]
-        assert (T_boundary[0] <= T_spread[first_false_index - 1] <= T_boundary[1])
-        assert not (T_boundary[0] <= T_spread[first_false_index] <= T_boundary[1])
+        # Select the values for the time step in the spread just before
+        # and after the temperature leaves the temperature bin as bounds
+        # for the root finding method.
 
-        times_bounding_root = time_spread[first_false_index-1:first_false_index+1]
+        dt_bounds = (dt_spread[first_false_index-1:first_false_index+1]).value
 
-#        print(f"  times_bounding_root = {times_bounding_root}")
+        # Define a function for the difference between the temperature
+        # and the temperature boundary as a function of the value of the
+        # time step.
 
-        # Find which temperature bin boundary is being crossed.
+        T_val = lambda dtval: \
+            (self.electron_temperature(t + dtval*u.s) - T_boundary[boundary_index]).value
 
-        T_at_time_bounds = [self.electron_temperature(time) for time in times_bounding_root]
-
-        assert T_boundary[0] <= T_at_time_bounds[0] <= T_boundary[1]
-#        boundary_index = int(T_at_time_bounds[0] < T_at_time_bounds[1])
-#        T_at_boundary = T_boundary[boundary_index]
-
-        # Change to checks rather than assert statements
-
-#        assert T_boundary[0] <= T_at_time_bounds[0] <= T_boundary[1]
-#        assert not (T_boundary[0] <= T_at_time_bounds[1] <= T_boundary[1])
-
-#        print(f"  T_at_time_bounds = {T_at_time_bounds}")
-#        print(f"  boundary_index = {boundary_index}")
-#        print(f"  T_at_boundary = {T_at_boundary}")
-
-        # Now to find the root!
-
-        def T_val(dtval):
-#            resulting_quantity = (self.electron_temperature(t + dtval*u.s) - T_at_boundary).to(u.K)
-#            print(f'T_val({dtval}) = {resulting_quantity}')
-            T = self.electron_temperature(t + dtval*u.s)
-            zero_if_root = (T - T_boundary[boundary_index]) #* (T - T_boundary[1])
-            return zero_if_root.value
-
-#        print(T_at_time_bounds)
-
-#        print(T_val(times_bounding_root[0].value),
-#              T_val(times_bounding_root[1].value))
-
-#        assert T_val(times_bounding_root[0].value) \
-#            * T_val(times_bounding_root[1].value) <= 0
-
-
-#        tight_time_bounds =
-#        loose_time_bounds = time_spread[0].value
+        # Next we find the root.  This method should succeed as long as
+        # the root is bracketed by dt_bounds.  Because astropy.units is
+        # not fully compatible with SciPy, we temporarily drop units and
+        # then reattach them.
 
         try:
-
-            print("Attemting to find root.")
-
             new_dt = optimize.brentq(
                 T_val,
-                dt_spread[first_false_index-1].value,
-                np.min([dt_spread[first_false_index].value, self.time_max.value]),
-                xtol=1e-9,
-                maxiter=20000,
+                *dt_bounds,
+                xtol=1e-14,
+                maxiter=1000,
                 disp=True,
             ) * u.s
-
-#            t_guess = (times_bounding_root[0].value + times_bounding_root[1].value)/2
-
-#            new_dt = optimize.newton(T_val, t_guess, tol=1e-10) * u.s
-
-            print(f"new_dt = {new_dt}")
         except Exception as exc:
-            raise RuntimeError(f"Unable to find new dt at t = {t}") from exc
+            raise NEIError(f"Unable to find new dt at t = {t}") from exc
         else:
             if np.isnan(new_dt.value):
-                raise RuntimeError(f"new_dt = {new_dt}")
+                raise NEIError(f"new_dt = {new_dt}")
 
-#        print("Assigning self._dt")
+        # Enforce that the time step is in the interval [dt_min, dt_max].
+
+        if new_dt < self.dt_min:
+            new_dt = self.dt_min
+        elif new_dt > self.dt_max:
+            new_dt = self.dt_max
+
+        # Store the time step as a private attribute so that it can be
+        # used in the time advance.
 
         self._dt = new_dt.to(u.s)
 
-        print(f"self._dt = {self._dt}")
-
     def set_timestep(self, dt: u.Quantity = None):
 
-        if dt is not None:
+        if dt is not None:  # Allow the time step to set manually.
             try:
                 dt = dt.to(u.s)
-
             except Exception as exc:
-                raise NEIError(f"{dt} is not a valid timestep.") from exc
+                raise NEIError(f"{dt} is not a valid time step.") from exc
             finally:
                 self._dt = dt
         elif self.adapt_dt:
             try:
                 self._set_adaptive_timestep()
             except Exception as exc:
-                raise RuntimeError("Unable to set adaptive timestep.") from exc
-            if np.isclose(self._dt.value, 0):
-                raise StopIteration
+                raise NEIError("Unable to adapt the time step.") from exc
         elif self.dt_input is not None:
             self._dt = self.dt_input
         else:
-            raise NEIError("Unable to get set timestep.")
+            raise NEIError("Unable to set the time step.")
 
         self._old_time = self._new_time
         self._new_time = self._old_time + self._dt
-
-        print(f"self._old_time = {self._old_time}")
-        print(f"self._new_time = {self._new_time}")
-
-        if self._old_time >= self.time_max:
-            raise StopIteration
 
         if self._new_time > self.time_max:
             self._new_time = self.time_max
@@ -1249,6 +1241,9 @@ class NEI:
                 new_T_e=self.electron_temperature(new_time),
                 new_n=self.hydrogen_number_density(new_time),
             )
+
+        if new_time >= self.time_max or np.isclose(new_time.value, self.time_max.value):
+            raise StopIteration
 
     def save(self, filename: str = "nei.h5"):
         """
@@ -1352,7 +1347,7 @@ class Visualize(NEI):
             time = time_sequence.to(u.s)
         except TypeError:
             print("Invalid time units")
-        
+
         if ion == 'all':
             charge_states = pl.atomic.atomic_number(self.element) + 1
         else:
@@ -1418,7 +1413,7 @@ class Visualize(NEI):
             color_idx = 1
 
             for idx in time_index:
-                
+
                 #Toggle between zero and one for colors array
                 color_idx ^= 1
 
@@ -1430,8 +1425,8 @@ class Visualize(NEI):
             ax.set_title(f'{self.element}')
 
             ax.set_xlabel('Charge State')
-            ax.set_ylabel('Ionic Fraction') 
-    
+            ax.set_ylabel('Ionic Fraction')
+
             ax.legend(loc='best')
             #plt.show()
 
@@ -1441,10 +1436,10 @@ class Visualize(NEI):
             ax.set_xticklabels(charge_states)
             ax.set_title(f'{self.element}')
             ax.set_xlabel('Charge State')
-            ax.set_ylabel('Ionic Fraction') 
+            ax.set_ylabel('Ionic Fraction')
             #plt.show()
 
-    
+
     def rh_density_plot(self, gamma, mach, ion='None'):
         """
         Creates a plot of the Rankine-Huguniot jump relation for the
@@ -1455,7 +1450,7 @@ class Visualize(NEI):
         gamma: float,
                The specific heats ratio of the system
         mach: float,
-              The mach number of the scenario 
+              The mach number of the scenario
         ion: int,
              The ionic integer charge of the element in question
         """
@@ -1503,7 +1498,7 @@ class Visualize(NEI):
         gamma: float,
                The specific heats ratio of the system
         mach: float,
-              The mach number of the scenario 
+              The mach number of the scenario
         """
 
         #Instantiate the MHD class
