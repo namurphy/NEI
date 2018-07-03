@@ -8,6 +8,7 @@ from scipy import interpolate, optimize
 from .eigenvaluetable import EigenData2
 from .ionization_states import IonizationStates
 import warnings
+from nei.physics import *
 
 # TODO: Allow this to keep track of velocity and position too, and
 # eventually to have density and temperature be able to be functions of
@@ -1291,16 +1292,7 @@ class NEI:
                   The time value associated with index input(s)
         """
 
-        index_arr = []
-        time_arr = []
-
-        for idx, val in enumerate(self.results.time.value):
-            index_arr.append(idx)
-            time_arr.append(val)
-
-        get_time = interpolate.interp1d(index_arr, time_arr)
-
-        return get_time(index)*u.s
+        return self.results.time[index]
 
     def time_to_index(self, time):
         """
@@ -1308,86 +1300,37 @@ class NEI:
 
         Parameters
         ------
-        time: array-like
+        time: array-like,
                A value or array of values representing the values of
                the time array created by the simulation
 
         Returns
         ------
-        get_index: array-like,
+        index: int or array-like,
                   The index value associated with the time input(s)
         """
+        index = (np.abs(self.results.time.value - time)).argmin()
 
-        index_arr = []
-        time_arr = []
 
-        for idx, val in enumerate(self.results.time.value):
-            index_arr.append(idx)
-            time_arr.append(val)
+        return index
 
-        get_time = interpolate.interp1d(time_arr, index_arr)
-
-        return np.array(get_time(time), dtype=int)
-
-    def dens_ratio(self, gamma, mach):
-        """
-        Returns the density ratio according to the Rankine-Hugonoit
-        jump conditions
-
-        Parameters
-        ------
-        gamma: float,
-               The specific heats ratios of the system
-        mach: int,
-              The mach number of the system
-
-        Returns
-        ------
-        dens_ratio: array-like
-                   The density solution to the mass conservation equation as
-                   defined by the Rankine-Hugoniot relations.
-        """
-
-        dens_ratio = ((gamma+1)*mach**2)/(2+(gamma-1)*mach**2)
-
-        return dens_ratio
-
-    def temp_ratio(self, gamma, mach):
-        """
-        Returns the temperature ratio according to the Rankine-Hugonoit
-        jump conditions
-
-        Parameters
-        ------
-        gamma: float,
-               The specific heats ratios of the system
-        mach: int,
-              The mach number of the system
-
-        Returns
-        ------
-        temp_ratio: array-like
-                   The temperature solutions to the energy conservation equation as
-                   defined by the Rankine-Hugoniot relations.
-        """
-
-        temp_ratio = ((gamma+1)+2 * gamma * (mach**2-1))*\
-        ((gamma + 1) + (gamma-1)*(mach**2 - 1)) / \
-        (gamma + 1)**2*mach**2
-
-        return temp_ratio
-
-class Visualize:
+class Visualize(NEI):
     """
     Store plotting results from the simulation
     """
     def __init__(self, element, results):
         self.element = element
-        self.results = results
+        self._results = results
 
-    def ionfrac_evol_plot(self, ion, time_sequence):
+    def index_to_time(self, index):
         """
-        Creates a plot of the ionix fraction time evolution of element inputs
+        Inherits the index_to_time method of the NEI class
+        """
+        return super(Visualize, self).index_to_time(index)
+
+    def ionicfrac_evol_plot(self,time_sequence, ion='all'):
+        """
+        Creates a plot of the ionic fraction time evolution of element inputs
 
         Paramaters
         ------
@@ -1409,38 +1352,47 @@ class Visualize:
             time = time_sequence.to(u.s)
         except TypeError:
             print("Invalid time units")
+        
+        if ion == 'all':
+            charge_states = pl.atomic.atomic_number(self.element) + 1
+        else:
+            #Ensure ion input is array of integers
+            charge_states = np.array(ion, dtype=np.int16)
 
+        linsetyles = ['--','-.',':','-']
 
-        #Ensure ion input is array of integers
-        ion = np.array(ion, dtype=np.int16)
-
-
-
-        if ion.size > 1:
-            for nstate in ion:
+        if ion =='all':
+            for nstate in range(charge_states):
                 ionic_frac = self.results.ionic_fractions[self.element][:,nstate]
-                plt.plot(time.value,ionic_frac, label='%s+%i'%(self.element, nstate))
+                plt.plot(time.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label='%s+%i'%(self.element, nstate))
                 plt.xlabel('Time (s)')
                 plt.ylabel('Ionic Fraction')
                 plt.title('Ionic Fraction Evolution of {}'.format(self.element))
             plt.legend()
-            plt.show()
         else:
-            ionic_frac = self.results.ionic_fractions[self.element][:,ion]
-            plt.plot(time.value,ionic_frac)
-            plt.xlabel('Time (s)')
-            plt.ylabel('Ionic Fraction')
-            plt.title('Ionic Fraction Evolution of $%s^{%i+}$'%(self.element,ion))
-            plt.show()
+            if charge_states.size > 1:
+                for nstate in charge_states:
+                    ionic_frac = self.results.ionic_fractions[self.element][:,nstate]
+                    plt.plot(time.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label='%s+%i'%(self.element, nstate))
+                    plt.xlabel('Time (s)')
+                    plt.ylabel('Ionic Fraction')
+                    plt.title('Ionic Fraction Evolution of {}'.format(self.element))
+                plt.legend()
+                #plt.show()
+            else:
+                ionic_frac = self.results.ionic_fractions[self.element][:,charge_states]
+                plt.plot(time.value,ionic_frac)
+                plt.xlabel('Time (s)')
+                plt.ylabel('Ionic Fraction')
+                plt.title('Ionic Fraction Evolution of $%s^{%i+}$'%(self.element,ion))
+                #plt.show()
 
-    def ionfrac_bar_plot(self, time_index):
+    def ionicfrac_bar_plot(self, time_index):
         """
         Creates a bar plot of the ion fraction change at a particular time index
 
         Parameters
         ------
-        element: str,
-                 The elemental symbol of the atom (i.e. 'H')
         time_index: int,
                     The particular time index at which to collect the various ion fractiom
                     change
@@ -1451,7 +1403,7 @@ class Visualize:
 
         ion = pl.atomic.atomic_number(self.element)
 
-        x = np.linspace(0, ion, ion+1, dtype=np.int16)
+        charge_states = np.linspace(0, ion, ion+1, dtype=np.int16)
 
         width=1.0
 
@@ -1461,34 +1413,106 @@ class Visualize:
 
             alpha = 1.0
             colors = ['blue', 'red']
+
+            #Color index counter
+            color_idx = 1
+
             for idx in time_index:
-                ax.bar(x, self.results.ionic_fractions[self.element][idx,:], alpha=alpha, \
-                        width=width, color=colors[idx], label=f'Time:{idx} s')
-                alpha -= 0.4
-            ax.set_xticks(x-width/2.0)
-            ax.set_xticklabels(x)
+                
+                #Toggle between zero and one for colors array
+                color_idx ^= 1
+
+                ax.bar(charge_states, self.results.ionic_fractions[self.element][idx,:], alpha=alpha, \
+                        width=width, color=colors[color_idx], label=f'Time:{self.index_to_time(idx)}')
+                alpha -= 0.2
+            ax.set_xticks(charge_states-width/2.0)
+            ax.set_xticklabels(charge_states)
             ax.set_title(f'{self.element}')
-            ax.set_ylabel('Ionic Fraction')
+
+            ax.set_xlabel('Charge State')
+            ax.set_ylabel('Ionic Fraction') 
+    
             ax.legend(loc='best')
-            plt.show()
+            #plt.show()
 
         else:
             ax.bar(x, self.results.ionic_fractions[self.element][time_index,:], alpha=1.0, width=width)
-            ax.set_xticks(x-width/2.0)
-            ax.set_xticklabels(x)
+            ax.set_xticks(charge_states-width/2.0)
+            ax.set_xticklabels(charge_states)
             ax.set_title(f'{self.element}')
-            ax.set_ylabel('Ionic Fraction')
-            plt.show()
+            ax.set_xlabel('Charge State')
+            ax.set_ylabel('Ionic Fraction') 
+            #plt.show()
+
+    
+    def rh_density_plot(self, gamma, mach, ion='None'):
+        """
+        Creates a plot of the Rankine-Huguniot jump relation for the
+        density of our element
+
+        Parameters
+        ------
+        gamma: float,
+               The specific heats ratio of the system
+        mach: float,
+              The mach number of the scenario 
+        ion: int,
+             The ionic integer charge of the element in question
+        """
 
 
+        #Instantiate the MHD class
+        mhd = shocks.MHD()
+
+        nstates = pl.atomic.atomic_number(self.element) + 1
+
+        if ion == 'None':
+
+            for charge in range(nstates):
+
+                post_rho = mhd.rh_density(self.results.number_densities[self.element].value[0, charge], gamma, mach)
+
+                plt.semilogy(post_rho, label=f'{self.element}{charge}+')
+
+            plt.legend()
+            #plt.show()
+
+        else:
+
+            if not isinstance(ion, int):
+                raise TypeError('Please make sure that your charge value is an integer')
+            elif ion > nstates:
+                raise ValueError('The ionic charge input is greater than allowed for this element')
 
 
+            post_rho = mhd.rh_density(init_dens = self.results.number_densities[self.element].value[0, ion], gamma=gamma, mach=mach)
 
+            plt.semilogy(post_rho)
+            plt.title('Density Shock Transition')
+            plt.xlabel('Mach Number')
+            plt.ylabel('Number Density')
+            #plt.show()
 
+    def rh_temp_plot(self, gamma, mach):
+        """
+        Creates a plot of the Rankine-Huguniot jump relation for the
+        density of our element
 
+        Parameters
+        ------
+        gamma: float,
+               The specific heats ratio of the system
+        mach: float,
+              The mach number of the scenario 
+        """
 
+        #Instantiate the MHD class
+        mhd = shocks.MHD()
 
+        post_temp = mhd.rh_temp(self.results.T_e.value[0], gamma, mach)
 
-
-
-
+        plt.semilogy(mach, post_temp)
+        plt.title('Temperature Shock Transition')
+        plt.xlabel('Mach Number')
+        plt.ylabel('Log Temperature (K)')
+        #plt.show()
