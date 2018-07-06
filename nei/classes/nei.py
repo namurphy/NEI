@@ -4,7 +4,7 @@ from typing import Union, Optional, List, Dict, Callable
 import astropy.units as u
 import plasmapy as pl
 import collections
-from scipy import interpolate
+from scipy import interpolate, optimize
 from .eigenvaluetable import EigenData2
 from .ionization_states import IonizationStates
 import warnings
@@ -346,6 +346,12 @@ class NEI:
         The time step.  If `adapt_dt` is `False`, then `dt` is the time
         step for the whole simulation.
 
+    dt_max: `~astropy.units.Quantity`
+        The maximum time step to be used with an adaptive time step.
+
+    dt_min: `~astropy.units.Quantity`
+        The minimum time step to be used with an adaptive time step.
+
     adapt_dt: `bool`
         If `True`, change the time step based on the characteristic
         ionization and recombination time scales and change in
@@ -425,6 +431,8 @@ class NEI:
             max_steps: Union[int, np.integer] = 10000,
             tol: Union[int, float] = 1e-15,
             dt: u.Quantity = None,
+            dt_max: u.Quantity = np.inf * u.s,
+            dt_min: u.Quantity = 0 * u.s,
             adapt_dt: bool = None,
             safety_factor: Union[int, float] = 1,
             verbose: bool = False,
@@ -439,7 +447,14 @@ class NEI:
             self.n_input = n
             self.max_steps = max_steps
             self.dt_input = dt
-            self._dt = dt
+
+            if self.dt_input is None:
+                self._dt = self.time_max / max_steps
+            else:
+                self._dt = self.dt_input
+
+            self.dt_min = dt_min
+            self.dt_max = dt_max
             self.adapt_dt = adapt_dt
             self.safety_factor = safety_factor
             self.verbose = verbose
@@ -471,6 +486,12 @@ class NEI:
                 for element in self.initial.elements:
                     self.initial.ionic_fractions[element] = \
                         self.EigenDataDict[element].equilibrium_state(T_e_init.value)
+
+            self._temperature_grid = \
+                self._EigenDataDict[self.elements[0]].temperature_grid
+
+            self._get_temperature_index = \
+                self._EigenDataDict[self.elements[0]]._get_temperature_index
 
         except Exception:
             raise NEIError(
@@ -666,24 +687,6 @@ class NEI:
             raise TypeError("Invalid time_max.") from None
 
     @property
-    def dt_input(self) -> Optional[u.Quantity]:
-        """Return the inputted time step."""
-        return self._dt
-
-    @dt_input.setter
-    def dt_input(self, dt: Optional[u.Quantity]):
-        if dt is None:
-            self._dt_input = None
-            self._dt = None
-        elif isinstance(dt, u.Quantity):
-            try:
-                dt = dt.to(u.s)
-                if dt > 0 * u.s:
-                    self._dt_input = dt
-            except (AttributeError, u.UnitConversionError):
-                raise NEIError("Invalid dt.")
-
-    @property
     def adapt_dt(self) -> Optional[bool]:
         """
         Return `True` if the time step is set to be adaptive, `False`
@@ -700,6 +703,63 @@ class NEI:
             self._adapt_dt = choice
         else:
             raise TypeError("Invalid value for adapt_dt")
+
+    @property
+    def dt_input(self) -> Optional[u.Quantity]:
+        """Return the inputted time step."""
+        return self._dt_input
+
+    @dt_input.setter
+    def dt_input(self, dt: Optional[u.Quantity]):
+        if dt is None:
+            self._dt_input = None
+        elif isinstance(dt, u.Quantity):
+            try:
+                dt = dt.to(u.s)
+                if dt > 0 * u.s:
+                    self._dt_input = dt
+            except (AttributeError, u.UnitConversionError):
+                raise NEIError("Invalid dt.")
+
+    @property
+    def dt_min(self) -> u.Quantity:
+        return self._dt_min
+
+    @dt_min.setter
+    def dt_min(self, value: u.Quantity):
+        if not isinstance(value, u.Quantity):
+            raise TypeError("dt_min must be a Quantity.")
+        try:
+            value = value.to(u.s)
+        except u.UnitConversionError as exc:
+            raise u.UnitConversionError("Invalid units for dt_min.")
+        if hasattr(self, '_dt_input') and self.dt_input is not None and self.dt_input < value:
+            raise ValueError(
+                "dt_min cannot exceed the inputted time step.")
+        if hasattr(self, '_dt_max') and self.dt_max < value:
+            raise ValueError(
+                "dt_min cannot exceed dt_max.")
+        self._dt_min = value
+
+    @property
+    def dt_max(self) -> u.Quantity:
+        return self._dt_max
+
+    @dt_max.setter
+    def dt_max(self, value: u.Quantity):
+        if not isinstance(value, u.Quantity):
+            raise TypeError("dt_max must be a Quantity.")
+        try:
+            value = value.to(u.s)
+        except u.UnitConversionError as exc:
+            raise u.UnitConversionError("Invalid units for dt_max.")
+        if hasattr(self, '_dt_input') and self.dt_input is not None and self.dt_input > value:
+            raise ValueError(
+                "dt_max cannot be less the inputted time step.")
+        if hasattr(self, '_dt_min') and self.dt_min > value:
+            raise ValueError(
+                "dt_min cannot exceed dt_max.")
+        self._dt_max = value
 
     @property
     def safety_factor(self):
@@ -743,7 +803,9 @@ class NEI:
             raise TypeError
         if not time.unit.physical_type == 'time':
             raise u.UnitsError(f"{time} is not a valid time.")
-        return self.time_start <= time <= self.time_max
+        return self.time_start <= time <= self.time_max or \
+               np.isclose(time.value, self.time_start.value) or \
+               np.isclose(time.value, self.time_max.value)
 
     @property
     def max_steps(self) -> int:
@@ -806,8 +868,8 @@ class NEI:
 
     def electron_temperature(self, time: u.Quantity) -> u.Quantity:
         try:
-            if not self.in_time_interval(time):
-                raise NEIError("Not in simulation time interval.")
+#            if not self.in_time_interval(time):
+#                raise NEIError("Not in simulation time interval.")
             T_e = self._electron_temperature(time.to(u.s))
             if np.isnan(T_e) or np.isinf(T_e) or T_e < 0 * u.K:
                 raise NEIError(f"T_e = {T_e} at time = {time}.")
@@ -980,29 +1042,172 @@ class NEI:
                 f"which is prior to time_max = {self.time_max}."
             )
 
+    def _set_adaptive_timestep(self):
+        """Adapt the time step."""
+
+        t = self._new_time if hasattr(self, '_new_time') else self.t_start
+
+        # We need to guess the timestep in order to narrow down what the
+        # timestep should be.  If we are in the middle of a simulation,
+        # we can use the old timestep as a reasonable guess.  If we are
+        # simulation, then we can either use the inputted timestep or
+        # estimate it from other inputs.
+
+        dt_guess = self._dt if self._dt \
+            else self._dt_input if self._dt_input \
+            else self.time_max / self.max_steps
+
+        # Make sure that dt_guess does not lead to a time that is out
+        # of the domain.
+
+        dt_guess = dt_guess if t + dt_guess <= self.time_max - t else self.time_max - t
+
+        # The temperature may start out exactly at the boundary of a
+        # bin, so we check what bin it is in just slightly after to
+        # figure out which temperature bin the plasma is entering.
+
+        T = self.electron_temperature(t + 1e-9 * dt_guess)
+
+        # Find the boundaries to the temperature bin.
+
+        index = self._get_temperature_index(T.to(u.K).value)
+        T_nearby = np.array(self._temperature_grid[index-1:index+2]) * u.K
+        T_boundary = (T_nearby[0:-1] + T_nearby[1:]) / 2
+
+        # In order to use Brent's method, we must bound the root's
+        # location.  Functions may change sharply or slowly, so we test
+        # different times that are logarithmically spaced to find the
+        # first one that is outside of the boundary.
+
+        dt_spread = np.geomspace(1e-9 * dt_guess.value, (self.time_max - t).value, num=100) * u.s
+        time_spread = t + dt_spread
+        T_spread = [self.electron_temperature(time) for time in time_spread]
+        in_range = [T_boundary[0] <= temp <= T_boundary[1] for temp in T_spread]
+
+        # If all of the remaining temperatures are in the same bin, then
+        # the temperature will be roughly constant for the rest of the
+        # simulation.  Take one final long time step, unless it exceeds
+        # dt_max.
+
+        if all(in_range):
+            new_dt = self.time_max - t
+            self._dt = new_dt if new_dt <= self.dt_max else self.dt_max
+            return
+
+        # Otherwise, we need to find the first index in the spread that
+        # corresponds to a temperature outside of the temperature bin
+        # for this time step.
+
+        first_false_index = in_range.index(False)
+
+        # We need to figure out if the temperature is dropping so that
+        # it crosses the low temperature boundary of the bin, or if it
+        # is rising so that it crosses the high temperature of the bin.
+
+        T_first_outside = self.electron_temperature(time_spread[first_false_index])
+
+        if T_first_outside >= T_boundary[1]:
+            boundary_index = 1
+        elif T_first_outside <= T_boundary[0]:
+            boundary_index = 0
+
+        # Select the values for the time step in the spread just before
+        # and after the temperature leaves the temperature bin as bounds
+        # for the root finding method.
+
+        dt_bounds = (dt_spread[first_false_index-1:first_false_index+1]).value
+
+        # Define a function for the difference between the temperature
+        # and the temperature boundary as a function of the value of the
+        # time step.
+
+        T_val = lambda dtval: \
+            (self.electron_temperature(t + dtval*u.s) - T_boundary[boundary_index]).value
+
+        # Next we find the root.  This method should succeed as long as
+        # the root is bracketed by dt_bounds.  Because astropy.units is
+        # not fully compatible with SciPy, we temporarily drop units and
+        # then reattach them.
+
+        try:
+            new_dt = optimize.brentq(
+                T_val,
+                *dt_bounds,
+                xtol=1e-14,
+                maxiter=1000,
+                disp=True,
+            ) * u.s
+        except Exception as exc:
+            raise NEIError(f"Unable to find new dt at t = {t}") from exc
+        else:
+            if np.isnan(new_dt.value):
+                raise NEIError(f"new_dt = {new_dt}")
+
+        # Enforce that the time step is in the interval [dt_min, dt_max].
+
+        if new_dt < self.dt_min:
+            new_dt = self.dt_min
+        elif new_dt > self.dt_max:
+            new_dt = self.dt_max
+
+        # Store the time step as a private attribute so that it can be
+        # used in the time advance.
+
+        self._dt = new_dt.to(u.s)
 
     def set_timestep(self, dt: u.Quantity = None):
+        """
+        Set the time step for the next non-equilibrium ionization time
+        advance.
+
+        Parameters
+        ----------
+        dt: ~astropy.units.Quantity, optional
+            The time step to be used for the next time advance.
+
+        Notes
+        -----
+        If `dt` is not `None`, then the time step will be set to `dt`.
+
+        If `dt` is not set and the `adapt_dt` attribute of an
+        `~nei.classes.NEI` instance is `True`, then this method will
+        calculate the time step corresponding to how long it will be
+        until the temperature rises or drops into the next temperature
+        bin.  If this time step is between `dtmin` and `dtmax`, then
+
+        If `dt` is not set and the `adapt_dt` attribute is `False`, then
+        this method will set the time step as what was inputted to the
+        `~nei.classes.NEI` class upon instantiation in the `dt` argument
+        or through the `~nei.classes.NEI` class's `dt_input` attribute.
+
+        Raises
+        ------
+        ~nei.classes.NEIError
+            If the time step cannot be set, for example if the `dt`
+            argument is invalid or the time step cannot be adapted.
+
+        """
+
         if dt is not None:
+            # Allow the time step to set as an argument to this method.
             try:
                 dt = dt.to(u.s)
-            except Exception:
-                raise NEIError(f"{dt} is not a valid timestep.")
+            except Exception as exc:
+                raise NEIError(f"{dt} is not a valid time step.") from exc
             finally:
                 self._dt = dt
         elif self.adapt_dt:
-            raise NotImplementedError(
-                "Adaptive time step not yet implemented; set adapt_dt "
-                "to False.")
+            try:
+                self._set_adaptive_timestep()
+            except Exception as exc:
+                raise NEIError("Unable to adapt the time step.") from exc
         elif self.dt_input is not None:
             self._dt = self.dt_input
         else:
-            raise NEIError("Unable to get set timestep.")
+            raise NEIError("Unable to set the time step.")
 
         self._old_time = self._new_time
         self._new_time = self._old_time + self._dt
-
-        if self._old_time >= self.time_max:
-            raise StopIteration
 
         if self._new_time > self.time_max:
             self._new_time = self.time_max
@@ -1018,7 +1223,7 @@ class NEI:
 
         step = self.results._index
         T_e = self.results.T_e[step - 1].value
-        n_e = self.results.n_e[step - 1].value
+        n_e = self.results.n_e[step - 1].value  # set average
         dt = self._dt.value
 
         if self.verbose:
@@ -1069,13 +1274,15 @@ class NEI:
                 new_n=self.hydrogen_number_density(new_time),
             )
 
+        if new_time >= self.time_max or np.isclose(new_time.value, self.time_max.value):
+            raise StopIteration
+
     def save(self, filename: str = "nei.h5"):
         """
         Save the `~nei.classes.NEI` instance to an HDF5 file.  Not
         implemented.
         """
         raise NotImplementedError
-
 
     def visual(self, element):
         """
@@ -1084,7 +1291,7 @@ class NEI:
         Parameter
         ------
         element: str,
-                 The elemental symbol of the particle in question (i.e. 'H')
+            The elemental symbol of the particle in question (i.e. 'H')
 
         Returns
         ------
@@ -1130,7 +1337,6 @@ class NEI:
         """
         index = (np.abs(self.results.time.value - time)).argmin()
 
-
         return index
 
 class Visualize(NEI):
@@ -1147,7 +1353,7 @@ class Visualize(NEI):
         """
         return super(Visualize, self).index_to_time(index)
 
-    def ionicfrac_evol_plot(self,time_sequence, ion='all'):
+    def ionicfrac_evol_plot(self, time_sequence, ion='all'):
         """
         Creates a plot of the ionic fraction time evolution of element inputs
 
@@ -1171,7 +1377,7 @@ class Visualize(NEI):
             time = time_sequence.to(u.s)
         except TypeError:
             print("Invalid time units")
-        
+
         if ion == 'all':
             charge_states = pl.atomic.atomic_number(self.element) + 1
         else:
@@ -1229,7 +1435,6 @@ class Visualize(NEI):
         fig, ax = plt.subplots()
         if isinstance(time_index, (list, np.ndarray)):
 
-
             alpha = 1.0
             colors = ['blue', 'red']
 
@@ -1237,7 +1442,7 @@ class Visualize(NEI):
             color_idx = 1
 
             for idx in time_index:
-                
+
                 #Toggle between zero and one for colors array
                 color_idx ^= 1
 
@@ -1249,8 +1454,8 @@ class Visualize(NEI):
             ax.set_title(f'{self.element}')
 
             ax.set_xlabel('Charge State')
-            ax.set_ylabel('Ionic Fraction') 
-    
+            ax.set_ylabel('Ionic Fraction')
+
             ax.legend(loc='best')
             #plt.show()
 
@@ -1260,10 +1465,9 @@ class Visualize(NEI):
             ax.set_xticklabels(charge_states)
             ax.set_title(f'{self.element}')
             ax.set_xlabel('Charge State')
-            ax.set_ylabel('Ionic Fraction') 
+            ax.set_ylabel('Ionic Fraction')
             #plt.show()
 
-    
     def rh_density_plot(self, gamma, mach, ion='None'):
         """
         Creates a plot of the Rankine-Huguniot jump relation for the
@@ -1274,11 +1478,10 @@ class Visualize(NEI):
         gamma: float,
                The specific heats ratio of the system
         mach: float,
-              The mach number of the scenario 
+              The mach number of the scenario
         ion: int,
              The ionic integer charge of the element in question
         """
-
 
         #Instantiate the MHD class
         mhd = shocks.MHD()
@@ -1322,7 +1525,7 @@ class Visualize(NEI):
         gamma: float,
                The specific heats ratio of the system
         mach: float,
-              The mach number of the scenario 
+              The mach number of the scenario
         """
 
         #Instantiate the MHD class
