@@ -1168,18 +1168,16 @@ class Visualize(NEI):
             raise TypeError('The element input must be a string')
 
         #Check to see if x_axis units are of time or length
-        try:
-            if isinstance(x_axis, u.Quantity):
-                try:
-                    x = x_axis.to(u.s)
-                    xlabel = 'Time'
-                except Exception:
-                    x = x_axis.to(u.R_sun)
-                    xlabel = 'Distance'
-            else:
-                raise TypeError('Invalid x-axis units. Must be units of length or time.')
-        except AttributeError:
+        if isinstance(x_axis, u.Quantity):
+            try:
+                x = x_axis.to(u.s)
+                xlabel = 'Time'
+            except Exception:
+                x = x_axis.to(u.R_sun)
+                xlabel = 'Distance'
+        else:
             raise TypeError('Invalid x-axis units. Must be units of length or time.')
+
             
 
 
