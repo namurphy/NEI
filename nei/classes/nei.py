@@ -1156,8 +1156,40 @@ class NEI:
         self._dt = new_dt.to(u.s)
 
     def set_timestep(self, dt: u.Quantity = None):
+        """
+        Set the time step for the next non-equilibrium ionization time
+        advance.
 
-        if dt is not None:  # Allow the time step to set manually.
+        Parameters
+        ----------
+        dt: ~astropy.units.Quantity, optional
+            The time step to be used for the next time advance.
+
+        Notes
+        -----
+        If `dt` is not `None`, then the time step will be set to `dt`.
+
+        If `dt` is not set and the `adapt_dt` attribute of an
+        `~nei.classes.NEI` instance is `True`, then this method will
+        calculate the time step corresponding to how long it will be
+        until the temperature rises or drops into the next temperature
+        bin.  If this time step is between `dtmin` and `dtmax`, then
+
+        If `dt` is not set and the `adapt_dt` attribute is `False`, then
+        this method will set the time step as what was inputted to the
+        `~nei.classes.NEI` class upon instantiation in the `dt` argument
+        or through the `~nei.classes.NEI` class's `dt_input` attribute.
+
+        Raises
+        ------
+        ~nei.classes.NEIError
+            If the time step cannot be set, for example if the `dt`
+            argument is invalid or the time step cannot be adapted.
+
+        """
+
+        if dt is not None:
+            # Allow the time step to set as an argument to this method.
             try:
                 dt = dt.to(u.s)
             except Exception as exc:
