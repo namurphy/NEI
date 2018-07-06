@@ -1167,15 +1167,20 @@ class Visualize(NEI):
         if not isinstance(self.element, str):
             raise TypeError('The element input must be a string')
 
-        #Check if time input is in units of time
+        #Check to see if x_axis units are of time or length
         try:
-            x = x_axis.to(u.s)
-            xlabel = 'Time'
-        except Exception:
-            x = x_axis.to(u.R_sun)
-            xlabel = 'Distance'
-        else:
-            raise TypeError('Invalid x-axis units. Can only be distance or time.')
+            if isinstance(x_axis, u.Quantity):
+                try:
+                    x = x_axis.to(u.s)
+                    xlabel = 'Time'
+                except Exception:
+                    x = x_axis.to(u.R_sun)
+                    xlabel = 'Distance'
+            else:
+                raise TypeError('Invalid x-axis units. Must be units of length or time.')
+        except AttributeError:
+            raise TypeError('Invalid x-axis units. Must be units of length or time.')
+            
 
 
         
@@ -1190,7 +1195,7 @@ class Visualize(NEI):
         if ion =='all':
             for nstate in range(charge_states):
                 ionic_frac = self.results.ionic_fractions[self.element][:,nstate]
-                plt.plot(x.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label='%s+%i'%(self.element, nstate))
+                plt.plot(x.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label=f'{self.element}+{nstate}')
                 plt.xlabel(f'{xlabel} ({x.unit})')
                 plt.ylabel('Ionic Fraction')
                 plt.title('Ionic Fraction Evolution of {}'.format(self.element))
@@ -1199,7 +1204,7 @@ class Visualize(NEI):
             if charge_states.size > 1:
                 for nstate in charge_states:
                     ionic_frac = self.results.ionic_fractions[self.element][:,nstate]
-                    plt.plot(x.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label='%s+%i'%(self.element, nstate))
+                    plt.plot(x.value,ionic_frac, linestyle= linsetyles[nstate % len(linsetyles)], label=f'{self.element}+{nstate}')
                     plt.xlabel(f'{xlabel} ({x.unit})')
                     plt.ylabel('Ionic Fraction')
                     plt.title('Ionic Fraction Evolution of {}'.format(self.element))
@@ -1210,7 +1215,7 @@ class Visualize(NEI):
                 plt.plot(x.value,ionic_frac)
                 plt.xlabel(f'{xlabel} ({x.unit})')
                 plt.ylabel('Ionic Fraction')
-                plt.title('Ionic Fraction Evolution of $%s^{%i+}$'%(self.element,ion))
+                plt.title('Ionic Fraction Evolution of %s$^{%i+}$'%(self.element,ion))
                 #plt.show()
 
     def ionicfrac_bar_plot(self, time_index):
