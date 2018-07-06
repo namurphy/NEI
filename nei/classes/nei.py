@@ -1284,7 +1284,6 @@ class NEI:
         """
         raise NotImplementedError
 
-
     def visual(self, element):
         """
         Returns an atomic object used for plotting protocols
@@ -1292,7 +1291,7 @@ class NEI:
         Parameter
         ------
         element: str,
-                 The elemental symbol of the particle in question (i.e. 'H')
+            The elemental symbol of the particle in question (i.e. 'H')
 
         Returns
         ------
@@ -1338,7 +1337,6 @@ class NEI:
         """
         index = (np.abs(self.results.time.value - time)).argmin()
 
-
         return index
 
 class Visualize(NEI):
@@ -1355,7 +1353,7 @@ class Visualize(NEI):
         """
         return super(Visualize, self).index_to_time(index)
 
-    def ionicfrac_evol_plot(self,time_sequence, ion='all'):
+    def ionicfrac_evol_plot(self, time_sequence, ion='all'):
         """
         Creates a plot of the ionic fraction time evolution of element inputs
 
@@ -1437,7 +1435,6 @@ class Visualize(NEI):
         fig, ax = plt.subplots()
         if isinstance(time_index, (list, np.ndarray)):
 
-
             alpha = 1.0
             colors = ['blue', 'red']
 
@@ -1471,7 +1468,6 @@ class Visualize(NEI):
             ax.set_ylabel('Ionic Fraction')
             #plt.show()
 
-
     def rh_density_plot(self, gamma, mach, ion='None'):
         """
         Creates a plot of the Rankine-Huguniot jump relation for the
@@ -1486,7 +1482,6 @@ class Visualize(NEI):
         ion: int,
              The ionic integer charge of the element in question
         """
-
 
         #Instantiate the MHD class
         mhd = shocks.MHD()
