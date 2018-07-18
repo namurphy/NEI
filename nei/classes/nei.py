@@ -793,7 +793,7 @@ class NEI:
             raise TypeError("Invalid choice for verbose.")
 
     @u.quantity_input
-    def in_time_interval(self, time: u.s, buffer: u.s = 1e-9 * u.s) -> bool:
+    def in_time_interval(self, time: u.s, buffer: u.s = 1e-9 * u.s):
         """
         Return `True` if the `time` is between `time_start - buffer` and
         `time_max + buffer` , and `False` otherwise.
